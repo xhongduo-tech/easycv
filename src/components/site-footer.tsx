@@ -20,6 +20,8 @@ export function SiteFooter() {
         <div>
           <h3>产品</h3>
           <Link href="/dashboard">个人工作台</Link>
+          <Link href="/growth">成长路线建议</Link>
+          <Link href="/web-resume">GitHub 网页简历</Link>
           <Link href="/privacy">隐私与 AI 说明</Link>
           <Link href="/terms">用户协议</Link>
         </div>

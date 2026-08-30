@@ -15,6 +15,8 @@ export function SiteHeader() {
             毕业求职
           </Link>
           <Link href="/explore">开始创建</Link>
+          <Link href="/growth">成长路线</Link>
+          <Link href="/web-resume">网页简历</Link>
           <Link href="/#how-it-works">使用指南</Link>
         </nav>
         <div className="header-actions">
@@ -36,6 +38,8 @@ export function SiteHeader() {
               <Link href="/explore?track=study">留学申请</Link>
               <Link href="/explore?track=career">毕业求职</Link>
               <Link href="/explore">开始创建</Link>
+              <Link href="/growth">成长路线</Link>
+              <Link href="/web-resume">网页简历</Link>
               <Link href="/dashboard">我的工作台</Link>
             </div>
           </details>

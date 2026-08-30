@@ -4,9 +4,11 @@ import {
   ArrowUpRight,
   BadgeCheck,
   BookOpenCheck,
+  BrainCircuit,
   Building2,
   Check,
   Download,
+  Globe2,
   GraduationCap,
   Layers3,
   PencilLine,
@@ -18,7 +20,7 @@ import {
 import { ResumePreview } from "@/components/resume-preview";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
-import { createStarterContent, templates } from "@/lib/sample-data";
+import { createStarterContent, targetProfiles, templates } from "@/lib/sample-data";
 import styles from "./home.module.css";
 
 const featuredTemplates = templates.filter((template) =>
@@ -49,6 +51,7 @@ export default function HomePage() {
               </Link>
             </div>
             <div className={styles.trustLine}>
+              <span><BadgeCheck size={16} /> {targetProfiles.length} 个目标适配方案</span>
               <span><BadgeCheck size={16} /> 无需外部 AI 密钥</span>
               <span><BadgeCheck size={16} /> 内容由你确认后保存</span>
               <span><BadgeCheck size={16} /> 可导出 ATS 纯文本</span>
@@ -83,9 +86,9 @@ export default function HomePage() {
 
       <section className={styles.signalBar} aria-label="平台能力">
         <div className="shell">
-          <span>目标画像驱动</span>
+          <span>{targetProfiles.length} 个院校与企业目标</span>
           <span>·</span>
-          <span>中英文内容</span>
+          <span>{templates.length} 套共享视觉版式</span>
           <span>·</span>
           <span>实时预览</span>
           <span>·</span>
@@ -113,7 +116,7 @@ export default function HomePage() {
               <h3>留学申请 CV</h3>
               <p>根据国家、院校与项目类型，判断教育、科研、论文、课程与领导力的最佳顺序。</p>
               <ul>
-                <li><Check size={15} /> 英国 G5 / 美国名校 / 港新申请画像</li>
+                <li><Check size={15} /> 中国内地 / 港新 / 英美澳欧亚院校</li>
                 <li><Check size={15} /> 学术证据与课程匹配检查</li>
                 <li><Check size={15} /> 英文表达与一页/两页结构建议</li>
               </ul>
@@ -127,9 +130,9 @@ export default function HomePage() {
               <h3>毕业求职 CV</h3>
               <p>根据国企、大厂与岗位方向，突出专业匹配、业务影响、技术深度和协作边界。</p>
               <ul>
-                <li><Check size={15} /> 央国企 / 科技大厂 / 互联网画像</li>
+                <li><Check size={15} /> 央企国企 / 国内大厂 / 国际金融科技</li>
                 <li><Check size={15} /> 结果量化与关键词覆盖检查</li>
-                <li><Check size={15} /> 中文校招与英文求职双模式</li>
+                <li><Check size={15} /> 中文校招与国际求职表达建议</li>
               </ul>
               <Link href="/explore?track=career">选择目标企业 <ArrowUpRight size={17} /></Link>
             </article>
@@ -173,7 +176,7 @@ export default function HomePage() {
               <h3>同一份经历，多条目标路径</h3>
               <p>为院校或企业创建目标副本，切换模板不会丢内容，每次保存都有修订号。</p>
               <div className={styles.versionDemo}>
-                <span>母版资料</span><ArrowRight size={15} /><span>剑桥 MPhil</span><span>腾讯产品</span>
+                <span>经历副本</span><ArrowRight size={15} /><span>剑桥 MPhil</span><span>腾讯产品</span>
               </div>
             </article>
             <article className={`${styles.bentoWide} ${styles.safetyCard}`}>
@@ -251,6 +254,29 @@ export default function HomePage() {
         </div>
       </section>
 
+      <section className={styles.ecosystemSection}>
+        <div className="shell">
+          <div className={styles.sectionHeading}>
+            <div><p className="eyebrow">从一份文档到长期能力资产</p><h2>简历完成之后，继续向前。</h2></div>
+            <p>把已经整理好的证据转成公开作品，再根据当前缺口安排学习路线；两项能力都由你主动选择，不会代替你做事实判断。</p>
+          </div>
+          <div className={styles.ecosystemGrid}>
+            <Link href="/web-resume" className={styles.ecosystemCard}>
+              <div><span><Globe2 size={22} /></span><small>GITHUB PAGES</small></div>
+              <h3>导出个人网页简历</h3>
+              <p>生成安全、独立的 index.html，默认隐藏敏感联系方式，可直接上传至 GitHub Pages。</p>
+              <strong>生成网页简历 <ArrowUpRight size={16} /></strong>
+            </Link>
+            <Link href="/growth" className={styles.ecosystemCard}>
+              <div><span><BrainCircuit size={22} /></span><small>GROWTH ROUTE</small></div>
+              <h3>规划课程与证书路线</h3>
+              <p>对照目标和现有能力证据，从官方资源中挑出最多三项优先补强建议。</p>
+              <strong>查看成长建议 <ArrowUpRight size={16} /></strong>
+            </Link>
+          </div>
+        </div>
+      </section>
+
       <section className={styles.principlesSection}>
         <div className={`shell ${styles.principlesGrid}`}>
           <div>
@@ -278,7 +304,7 @@ export default function HomePage() {
               ["每个目标都需要一份不同的简历吗？", "不必从头重写。建议维护一份完整经历母版，再针对院校项目或企业岗位调整排序、摘要与证据重点。"],
               ["建议是学校或企业的官方要求吗？", "不是。简迹会区分公开事实与编辑建议；未找到公开依据时会明确标注，不暗示任何官方合作或录用承诺。"],
               ["没有配置 AI 密钥也能使用吗？", "可以。项目内置确定性的规则建议，目标检查、保存、模板切换与导出都可独立工作，不调用第三方 AI。"],
-              ["如何导出 PDF？", "编辑器提供 A4 打印模式，可使用浏览器“另存为 PDF”；同时支持服务端导出 ATS 纯文本与 JSON 备份。"],
+              ["如何导出和发布？", "编辑器支持浏览器另存为 PDF、ATS 纯文本和 JSON 备份；还可以生成单文件网页简历，再自行部署至 GitHub Pages。"],
             ].map(([question, answer], index) => (
               <details key={question} open={index === 0}>
                 <summary>{question}<span>+</span></summary>

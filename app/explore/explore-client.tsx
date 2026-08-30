@@ -21,11 +21,13 @@ import {
 import { Brand } from "@/components/brand";
 import { ResumePreview } from "@/components/resume-preview";
 import { createBlankContent, createStarterContent } from "@/lib/sample-data";
+import { recommendedTemplateIdsFor } from "@/lib/target-catalog";
 import type { ResumeTemplate, TargetProfile, Track } from "@/types/resume";
 import styles from "./explore.module.css";
 
 type Props = { initialTrack: Track; initialTemplate?: string };
 type ApiError = { error?: { message?: string } };
+type TargetGroup = { key: string; label: string; description: string; count: number };
 
 const studyOptions = {
   "申请层次": ["硕士", "博士", "本科转学"],
@@ -41,6 +43,9 @@ export function ExploreClient({ initialTrack, initialTemplate }: Props) {
   const router = useRouter();
   const [track, setTrack] = useState<Track>(initialTrack);
   const [targets, setTargets] = useState<TargetProfile[]>([]);
+  const [targetGroups, setTargetGroups] = useState<TargetGroup[]>([]);
+  const [targetTotal, setTargetTotal] = useState(0);
+  const [selectedGroup, setSelectedGroup] = useState(initialTrack === "study" ? "中国香港" : "央企国企");
   const [templates, setTemplates] = useState<ResumeTemplate[]>([]);
   const [selectedTarget, setSelectedTarget] = useState<string>("");
   const [selectedTemplate, setSelectedTemplate] = useState(initialTemplate ?? "");
@@ -64,7 +69,7 @@ export function ExploreClient({ initialTrack, initialTemplate }: Props) {
     Promise.all([
       fetch(`/api/targets?track=${track}`, { signal: controller.signal }).then((response) => {
         if (!response.ok) throw new Error("目标画像加载失败");
-        return response.json() as Promise<{ targets: TargetProfile[] }>;
+        return response.json() as Promise<{ targets: TargetProfile[]; groups: TargetGroup[]; total: number }>;
       }),
       fetch(`/api/templates?track=${track}`, { signal: controller.signal }).then((response) => {
         if (!response.ok) throw new Error("模板加载失败");
@@ -73,6 +78,13 @@ export function ExploreClient({ initialTrack, initialTemplate }: Props) {
     ])
       .then(([targetResult, templateResult]) => {
         setTargets(targetResult.targets);
+        setTargetGroups(targetResult.groups);
+        setTargetTotal(targetResult.total);
+        setSelectedGroup((current) =>
+          targetResult.groups.some((group) => group.key === current)
+            ? current
+            : targetResult.groups[0]?.key ?? "",
+        );
         setTemplates(templateResult.templates);
         setSelectedTarget((current) =>
           targetResult.targets.some((target) => target.id === current) ? current : "",
@@ -92,17 +104,33 @@ export function ExploreClient({ initialTrack, initialTemplate }: Props) {
 
   const visibleTargets = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    if (!normalized) return targets;
+    if (normalized) {
+      return targets.filter((target) =>
+        [target.id, target.name, target.category, target.region, target.description]
+          .join(" ")
+          .toLowerCase()
+          .includes(normalized),
+      );
+    }
     return targets.filter((target) =>
-      [target.name, target.category, target.region, target.description]
-        .join(" ")
-        .toLowerCase()
-        .includes(normalized),
+      (track === "study" ? target.region : target.category) === selectedGroup,
     );
-  }, [query, targets]);
+  }, [query, selectedGroup, targets, track]);
 
   const target = targets.find((item) => item.id === selectedTarget);
   const template = templates.find((item) => item.id === selectedTemplate);
+  const recommendedTemplateIds = useMemo(
+    () => (target ? recommendedTemplateIdsFor(target) : []),
+    [target],
+  );
+  const orderedTemplates = useMemo(() => [...templates].sort((a, b) => {
+    const aIndex = recommendedTemplateIds.indexOf(a.id);
+    const bIndex = recommendedTemplateIds.indexOf(b.id);
+    if (aIndex === -1 && bIndex === -1) return a.name.localeCompare(b.name, "zh-CN");
+    if (aIndex === -1) return 1;
+    if (bIndex === -1) return -1;
+    return aIndex - bIndex;
+  }), [recommendedTemplateIds, templates]);
   const optionGroups = track === "study" ? studyOptions : careerOptions;
 
   function changeTrack(nextTrack: Track) {
@@ -110,11 +138,24 @@ export function ExploreClient({ initialTrack, initialTemplate }: Props) {
     setQuery("");
     setCustomTarget("");
     setSelectedTarget("");
+    setSelectedGroup(nextTrack === "study" ? "中国香港" : "央企国企");
     setFilters(
       nextTrack === "study"
         ? { 申请层次: "硕士", 专业方向: "计算机 / AI" }
         : { 经验层级: "应届生", 岗位方向: "产品" },
     );
+  }
+
+  function chooseTarget(item: TargetProfile) {
+    setSelectedTarget(item.id);
+    setSelectedGroup(track === "study" ? item.region : item.category);
+    setCustomTarget("");
+    setQuery("");
+    setError("");
+    const firstRecommendation = recommendedTemplateIdsFor(item).find((id) =>
+      templates.some((templateItem) => templateItem.id === id),
+    );
+    if (firstRecommendation) setSelectedTemplate(firstRecommendation);
   }
 
   async function createResume() {
@@ -202,7 +243,31 @@ export function ExploreClient({ initialTrack, initialTemplate }: Props) {
           <section className={styles.stepBlock}>
             <div className={styles.stepHeading}>
               <span>01</span>
-              <div><h2>选择{track === "study" ? "院校" : "企业"}目标</h2><p>可搜索已有画像，也可以创建通用目标。</p></div>
+              <div><h2>选择{track === "study" ? "院校" : "企业"}目标</h2><p>先按{track === "study" ? "地区" : "企业类型"}缩小范围，再选择具体目标。</p></div>
+            </div>
+            <div className={styles.groupChooser}>
+              <div><span>一级分类</span><small>共 {targetTotal} 个目标适配方案</small></div>
+              <div role="group" aria-label={track === "study" ? "院校地区" : "企业类型"}>
+                {targetGroups.map((group) => (
+                  <button
+                    type="button"
+                    key={group.key}
+                    aria-pressed={selectedGroup === group.key && !query}
+                    className={selectedGroup === group.key && !query ? styles.activeGroup : ""}
+                    onClick={() => {
+                      setSelectedGroup(group.key);
+                      setQuery("");
+                      setSelectedTarget("");
+                      setCustomTarget("");
+                      setError("");
+                    }}
+                  >
+                    <strong>{group.label}</strong>
+                    <small>{group.count}</small>
+                  </button>
+                ))}
+              </div>
+              <p>{targetGroups.find((group) => group.key === selectedGroup)?.description}</p>
             </div>
             <label className={styles.searchBox}>
               <Search size={18} />
@@ -214,6 +279,11 @@ export function ExploreClient({ initialTrack, initialTemplate }: Props) {
               />
             </label>
 
+            <div className={styles.targetLevelTitle}>
+              <span>二级目标</span>
+              <small>{query ? `搜索到 ${visibleTargets.length} 个结果` : `${visibleTargets.length} 个可选方案`}</small>
+            </div>
+
             {loading ? (
               <div className={styles.loading}><LoaderCircle className={styles.spin} size={22} /> 正在加载目标画像…</div>
             ) : (
@@ -224,7 +294,7 @@ export function ExploreClient({ initialTrack, initialTemplate }: Props) {
                     type="button"
                     aria-pressed={selectedTarget === item.id}
                     className={selectedTarget === item.id ? styles.selectedTarget : ""}
-                    onClick={() => { setSelectedTarget(item.id); setCustomTarget(""); setError(""); }}
+                    onClick={() => chooseTarget(item)}
                   >
                     <span className={styles.targetLogo}>{track === "study" ? <BookOpen size={19} /> : <Building2 size={19} />}</span>
                     <div><strong>{item.name}</strong><small><MapPin size={12} /> {item.region} · {item.category}</small></div>
@@ -268,10 +338,10 @@ export function ExploreClient({ initialTrack, initialTemplate }: Props) {
           <section className={styles.stepBlock}>
             <div className={styles.stepHeading}>
               <span>03</span>
-              <div><h2>选择推荐模板</h2><p>模板只改变表现层，后续随时可以切换。</p></div>
+              <div><h2>选择共享版式</h2><p>{target ? `已按“${target.name}”适配方案把推荐版式排在前面。` : "选择目标后会自动推荐共享版式，后续仍可随时切换。"}</p></div>
             </div>
             <div className={styles.templateGrid}>
-              {templates.map((item) => (
+              {orderedTemplates.map((item) => (
                 <button
                   type="button"
                   key={item.id}
@@ -284,6 +354,7 @@ export function ExploreClient({ initialTrack, initialTemplate }: Props) {
                     <span /><span /><span /><span />
                   </div>
                   <div><strong>{item.name}</strong><small>{item.tags.slice(0, 2).join(" · ")}</small></div>
+                  {recommendedTemplateIds.includes(item.id) && <span className={styles.recommendedFlag}>目标推荐</span>}
                   {selectedTemplate === item.id && <span className={styles.check}><Check size={14} /></span>}
                 </button>
               ))}
@@ -309,9 +380,10 @@ export function ExploreClient({ initialTrack, initialTemplate }: Props) {
             </div>
             {target && (
               <div className={styles.targetInsight}>
-                <span><Sparkles size={14} /> 目标画像摘要</span>
+                <span><Sparkles size={14} /> {target.name} 适配建议</span>
                 <p>{target.description}</p>
                 <div>{target.keywords.slice(0, 3).map((keyword) => <small key={keyword}>{keyword}</small>)}</div>
+                <em>编辑建议 · 非官方模板{target.reviewedAt ? ` · ${target.reviewedAt} 复核` : ""}</em>
               </div>
             )}
             <p className={styles.disclaimer}><BadgeCheck size={14} /> 画像是编辑建议，不代表官方背书。当前为访客空间，请勿填写证件号等非必要敏感信息；清除浏览器数据后可能无法找回草稿。</p>

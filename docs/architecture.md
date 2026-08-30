@@ -12,7 +12,8 @@ flowchart LR
   Domain --> D1[(Cloudflare D1)]
   Domain --> Advisor[Local Advisor]
   App --> Renderer[Canonical Resume Renderer]
-  Renderer --> Print[Browser PDF / ATS Text]
+  Renderer --> Print[Browser PDF / ATS Text / GitHub Pages HTML]
+  Domain --> Growth[Growth Route Catalog]
 ```
 
 选择模块化单体而非微服务，是为了在产品验证阶段保持一条可测试、可部署的完整链路。未来上传、AI 和 PDF 导出成为长任务后，可按边界拆为 Worker，而简历领域模型和 API 契约保持稳定。
@@ -20,12 +21,13 @@ flowchart LR
 ## 2. 模块边界
 
 - Identity：随机 HttpOnly 访客会话映射到独立用户，预留实名账号与角色模型。
-- Target Catalog：大学、企业、类别、地区、关键词、优先级和语气。
-- Template：内容与样式分离的受控模板元数据。
+- Target Catalog：101 所院校与 85 家企业的编辑适配方案，包含类别、地区、关键词、优先级、来源类型与复核时间。
+- Template：16 套内容与样式分离的共享视觉版式，按目标策略推荐而不伪装成官方模板。
 - Resume：简历项目、当前修订、内容 JSON 和软删除。
 - Revision：每次内容更新生成不可变快照。
 - Recommendation：目标化规则检查、评分和建议事件。
-- Export：浏览器 A4 PDF、服务端 ATS 文本与 JSON。
+- Export：浏览器 A4 PDF、服务端 ATS 文本、JSON 与 GitHub Pages 单文件 HTML。
+- Growth：官方课程资源目录与基于目标/现有技能证据的确定性优先级建议。
 - Admin：聚合指标、内容治理与审计边界。
 
 ## 3. 数据模型
@@ -38,6 +40,7 @@ erDiagram
   RESUMES ||--o{ RESUME_VERSIONS : snapshots
   RESUMES ||--o{ SUGGESTION_EVENTS : receives
   USERS ||--o{ AUDIT_EVENTS : performs
+  CATALOG_META ||--|| TARGET_PROFILES : versions
 
   USERS {
     text id PK
@@ -72,6 +75,11 @@ erDiagram
     text resume_id FK
     integer revision UK
     text content_json
+  }
+  CATALOG_META {
+    text key PK
+    integer version
+    text updated_at
   }
 ```
 
@@ -117,3 +125,10 @@ erDiagram
 - Export Worker：固定 Chromium + 授权 CJK 字体，导出后再做文本抽取检查。
 - Observability：结构化日志、请求 ID、OpenTelemetry 与错误监控。
 - Data：备份恢复演练、账号导出/删除、保留期限和区域化部署。
+
+## 8. 公开网页与外部资源边界
+
+- GitHub Pages 导出是静态、无脚本、无远程依赖的单文件 HTML；所有用户内容经过 HTML 转义，链接只允许 HTTP(S)，响应和文档内同时设置 CSP。
+- 联系方式默认不进入网页文件；用户需要单独勾选并确认公开风险。
+- 当前不请求 GitHub OAuth 权限，也不代表用户创建或公开仓库。
+- 成长路线只指向提供方官方页面，不把未完成课程自动写入简历，也不承诺证书认可、录取或录用结果。

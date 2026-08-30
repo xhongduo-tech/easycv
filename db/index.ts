@@ -3,6 +3,7 @@ import { targetProfiles, templates } from "@/lib/sample-data";
 
 const SESSION_COOKIE = "jianji_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
+const CATALOG_VERSION = 3;
 let initialization: Promise<void> | undefined;
 
 export interface GuestSession {
@@ -79,6 +80,11 @@ async function initializeDatabase() {
       user_id TEXT NOT NULL REFERENCES users(id),
       expires_at TEXT NOT NULL,
       created_at TEXT NOT NULL
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS catalog_meta (
+      key TEXT PRIMARY KEY,
+      version INTEGER NOT NULL,
+      updated_at TEXT NOT NULL
     )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS templates (
       id TEXT PRIMARY KEY,
@@ -166,50 +172,91 @@ async function initializeDatabase() {
   ]);
 
   const now = new Date().toISOString();
-  const templateStatements = templates.map((template) =>
-    db
-      .prepare(`INSERT INTO templates
+  const catalogState = await db
+    .prepare("SELECT version FROM catalog_meta WHERE key = 'core'")
+    .first<{ version: number }>();
+  if (Number(catalogState?.version ?? 0) < CATALOG_VERSION) {
+    const templateStatements = Array.from(
+      { length: Math.ceil(templates.length / 9) },
+      (_, chunkIndex) => {
+        const chunk = templates.slice(chunkIndex * 9, chunkIndex * 9 + 9);
+        const placeholders = chunk.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").join(", ");
+        const values = chunk.flatMap((template) => [
+          template.id,
+          template.name,
+          template.description,
+          template.track,
+          template.accent,
+          template.layout,
+          JSON.stringify(template.tags),
+          JSON.stringify(template.recommendedFor),
+          template.active ? 1 : 0,
+          now,
+          now,
+        ]);
+        return db
+          .prepare(`INSERT INTO templates
         (id, name, description, track, accent, layout, tags_json, recommended_for_json, active, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO NOTHING`)
-      .bind(
-        template.id,
-        template.name,
-        template.description,
-        template.track,
-        template.accent,
-        template.layout,
-        JSON.stringify(template.tags),
-        JSON.stringify(template.recommendedFor),
-        template.active ? 1 : 0,
-        now,
-        now,
-      ),
-  );
-  if (templateStatements.length) await db.batch(templateStatements);
+        VALUES ${placeholders}
+        ON CONFLICT(id) DO UPDATE SET
+          name = excluded.name,
+          description = excluded.description,
+          track = excluded.track,
+          accent = excluded.accent,
+          layout = excluded.layout,
+          tags_json = excluded.tags_json,
+          recommended_for_json = excluded.recommended_for_json,
+          active = excluded.active,
+          updated_at = excluded.updated_at`)
+          .bind(...values);
+      },
+    );
+    if (templateStatements.length) await db.batch(templateStatements);
 
-  const profileStatements = targetProfiles.map((profile) =>
-    db
-      .prepare(`INSERT INTO target_profiles
+    const profileStatements = Array.from(
+      { length: Math.ceil(targetProfiles.length / 10) },
+      (_, chunkIndex) => {
+        const chunk = targetProfiles.slice(chunkIndex * 10, chunkIndex * 10 + 10);
+        const placeholders = chunk.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, 'editorial', ?, 1)").join(", ");
+        const values = chunk.flatMap((profile) => [
+          profile.id,
+          profile.track,
+          profile.name,
+          profile.category,
+          profile.region,
+          profile.description,
+          JSON.stringify(profile.keywords),
+          JSON.stringify(profile.priorities),
+          profile.tone,
+          "2026-08-30",
+        ]);
+        return db
+          .prepare(`INSERT INTO target_profiles
         (id, track, name, category, region, description, keywords_json, priorities_json, tone, source_type, reviewed_at, active)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'editorial', ?, 1)
-        ON CONFLICT(id) DO NOTHING`)
-      .bind(
-        profile.id,
-        profile.track,
-        profile.name,
-        profile.category,
-        profile.region,
-        profile.description,
-        JSON.stringify(profile.keywords),
-        JSON.stringify(profile.priorities),
-        profile.tone,
-        "2026-08-30",
-      ),
-  );
-  if (profileStatements.length) await db.batch(profileStatements);
+        VALUES ${placeholders}
+        ON CONFLICT(id) DO UPDATE SET
+          track = excluded.track,
+          name = excluded.name,
+          category = excluded.category,
+          region = excluded.region,
+          description = excluded.description,
+          keywords_json = excluded.keywords_json,
+          priorities_json = excluded.priorities_json,
+          tone = excluded.tone,
+          source_type = excluded.source_type,
+          reviewed_at = excluded.reviewed_at,
+          active = excluded.active`)
+          .bind(...values);
+      },
+    );
+    if (profileStatements.length) await db.batch(profileStatements);
 
-  await db.prepare("PRAGMA optimize").run();
+    await db
+      .prepare(`INSERT INTO catalog_meta (key, version, updated_at) VALUES ('core', ?, ?)
+      ON CONFLICT(key) DO UPDATE SET version = excluded.version, updated_at = excluded.updated_at`)
+      .bind(CATALOG_VERSION, now)
+      .run();
+  }
 }
 
 export async function recordAudit(

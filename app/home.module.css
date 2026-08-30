@@ -273,6 +273,7 @@
 .featureSection,
 .stepsSection,
 .templateSection,
+.ecosystemSection,
 .principlesSection,
 .faqSection,
 .finalCta {
@@ -417,6 +418,86 @@
 .featureSection,
 .templateSection {
   background: var(--canvas);
+}
+
+.ecosystemSection {
+  background: white;
+}
+
+.ecosystemGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+
+.ecosystemCard {
+  display: flex;
+  min-height: 370px;
+  flex-direction: column;
+  padding: 38px;
+  border: 1px solid var(--border);
+  border-radius: 25px;
+  background: linear-gradient(145deg, #f5f2ff, white 62%);
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.ecosystemCard:nth-child(2) {
+  background: linear-gradient(145deg, #f2fbdc, white 62%);
+}
+
+.ecosystemCard:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-5px);
+}
+
+.ecosystemCard > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ecosystemCard > div > span {
+  display: grid;
+  width: 50px;
+  height: 50px;
+  place-items: center;
+  border-radius: 15px;
+  color: white;
+  background: var(--brand);
+}
+
+.ecosystemCard:nth-child(2) > div > span {
+  color: var(--ink);
+  background: var(--lime);
+}
+
+.ecosystemCard small {
+  color: var(--muted);
+  font-size: .62rem;
+  font-weight: 760;
+  letter-spacing: .09em;
+}
+
+.ecosystemCard h3 {
+  margin: 58px 0 12px;
+  font-size: clamp(1.7rem, 3vw, 2.7rem);
+  letter-spacing: -.05em;
+}
+
+.ecosystemCard p {
+  max-width: 500px;
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.72;
+}
+
+.ecosystemCard > strong {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: auto;
+  color: var(--brand-dark);
+  font-size: .78rem;
 }
 
 .centerHeading {
@@ -950,6 +1031,7 @@
   .featureSection,
   .stepsSection,
   .templateSection,
+  .ecosystemSection,
   .principlesSection,
   .faqSection,
   .finalCta {
@@ -970,6 +1052,15 @@
   .stepsGrid,
   .templateGrid {
     grid-template-columns: 1fr;
+  }
+
+  .ecosystemGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .ecosystemCard {
+    min-height: 330px;
+    padding: 28px;
   }
 
   .pathCard {

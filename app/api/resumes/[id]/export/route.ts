@@ -1,6 +1,7 @@
 import { ensureDatabase, getOrCreateSession, getDatabase, recordAudit, withSessionCookie } from "@/../db";
 import { apiError, withApiError } from "@/lib/api";
-import { mapResume, type ResumeRow } from "@/lib/db-mappers";
+import { mapResume, mapTemplate, type ResumeRow, type TemplateRow } from "@/lib/db-mappers";
+import { toStandaloneHtml } from "@/lib/web-resume";
 import { exportQuerySchema, resumeIdParamSchema } from "@/lib/validation";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -10,8 +11,10 @@ export async function GET(request: Request, context: RouteContext) {
     await ensureDatabase();
     const session = await getOrCreateSession(request);
     const params = resumeIdParamSchema.safeParse(await context.params);
+    const searchParams = new URL(request.url).searchParams;
     const query = exportQuerySchema.safeParse({
-      format: new URL(request.url).searchParams.get("format") ?? undefined,
+      format: searchParams.get("format") ?? undefined,
+      includeContact: searchParams.get("includeContact") ?? undefined,
     });
     if (!params.success || !query.success) return withSessionCookie(apiError(422, "VALIDATION_ERROR", "导出参数无效"), session);
 
@@ -36,6 +39,25 @@ export async function GET(request: Request, context: RouteContext) {
           ...sharedHeaders,
           "content-type": "application/json; charset=utf-8",
           "content-disposition": `attachment; filename*=UTF-8''${encodeURIComponent(filename)}.json`,
+        },
+      }), session);
+    }
+
+    if (query.data.format === "github-pages") {
+      const template = await getDatabase()
+        .prepare("SELECT * FROM templates WHERE id = ? AND active = 1")
+        .bind(resume.templateId)
+        .first<TemplateRow>();
+      const mappedTemplate = template ? mapTemplate(template) : undefined;
+      return withSessionCookie(new Response(toStandaloneHtml(resume, {
+        includeContact: query.data.includeContact,
+        template: mappedTemplate,
+      }), {
+        headers: {
+          ...sharedHeaders,
+          "content-type": "text/html; charset=utf-8",
+          "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+          "content-disposition": "attachment; filename=\"index.html\"",
         },
       }), session);
     }

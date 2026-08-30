@@ -16,7 +16,7 @@ export default function PrivacyPage() {
         <div className="shell">
           <p className="eyebrow">隐私与 AI 说明</p>
           <h1>你的经历属于你，建议不能越过事实。</h1>
-          <p>本页描述当前演示版本的实际行为，以及接入真实用户和第三方模型前必须完成的保护措施。更新于 2026-08-30。</p>
+          <p>本页描述当前版本的实际行为，以及接入真实用户和第三方模型前必须完成的保护措施。更新于 2026-08-31。</p>
         </div>
       </header>
       <div className={`shell ${styles.content}`}>
@@ -24,6 +24,7 @@ export default function PrivacyPage() {
           <a href="#current">当前版本</a>
           <a href="#storage">数据保存</a>
           <a href="#ai">智能建议</a>
+          <a href="#public">公开网页</a>
           <a href="#rights">用户权利</a>
         </aside>
         <article className={styles.article}>
@@ -47,6 +48,14 @@ export default function PrivacyPage() {
               <p>正文会发送到本平台 API，由确定性规则检查；只有你主动点击时才会把草稿追加到对应经历，原文会保留。</p>
             </div>
             <p>未来接入外部模型前，产品必须说明发送的数据、接收方、用途和保留方式，并在传输前获得用户明确同意。</p>
+          </section>
+          <section id="public">
+            <h2>GitHub Pages 与外部学习资源</h2>
+            <ul>
+              <li>网页简历导出默认隐藏邮箱、电话和所在地；只有用户明确勾选后才包含这些字段。</li>
+              <li>下载的 <code>index.html</code> 由用户自行上传和管理。GitHub Pages 通常公开可访问，平台无法替用户撤回已经发布的副本。</li>
+              <li>成长路线只链接课程或提供方官方页面；打开外部页面后适用对方的隐私政策、Cookie 与账号规则。</li>
+            </ul>
           </section>
           <section id="rights">
             <h2>用户权利</h2>

@@ -18,8 +18,8 @@
 
 ## 目录
 
-- `GET /api/templates?track=study|career`
-- `GET /api/targets?track=study|career`
+- `GET /api/templates?track=study|career&targetProfileId=`（目标推荐排序）
+- `GET /api/targets?track=study|career&group=&q=`（返回分组、计数与目录总量）
 
 ## 简历
 
@@ -69,8 +69,21 @@
 
 - `GET /api/resumes/:id/export?format=txt`
 - `GET /api/resumes/:id/export?format=json`
+- `GET /api/resumes/:id/export?format=github-pages&includeContact=false`
 
-PDF 使用编辑器中的打印入口生成可选中文本的 A4 文档。
+PDF 使用编辑器中的打印入口生成可选中文本的 A4 文档。`github-pages` 返回可直接上传的 `index.html`；默认隐藏邮箱、电话和所在地，正文经过 HTML 转义且链接仅允许 HTTP(S)。
+
+## 成长路线
+
+- `POST /api/growth-recommendations`
+
+```json
+{
+  "resumeId": "uuid"
+}
+```
+
+响应最多返回三项官方学习资源、目标、排序理由和事实策略。未完成课程不会自动写入简历。
 
 ## 管理
 

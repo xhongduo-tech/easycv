@@ -6,6 +6,7 @@ import {
   AlertCircle,
   ArrowLeft,
   Award,
+  BookOpenCheck,
   BriefcaseBusiness,
   Check,
   CheckCircle2,
@@ -15,6 +16,7 @@ import {
   Eye,
   FileText,
   FolderKanban,
+  Globe2,
   GraduationCap,
   Languages,
   LayoutTemplate,
@@ -85,17 +87,25 @@ export function BuilderClient({ resumeId }: { resumeId: string }) {
     setLoading(true);
     setLoadError("");
     try {
-      const [resumeResponse, templateResponse] = await Promise.all([
-        fetch(`/api/resumes/${resumeId}`),
-        fetch("/api/templates"),
-      ]);
+      const resumeResponse = await fetch(`/api/resumes/${resumeId}`);
       const resumeResult = (await resumeResponse.json()) as {
         resume?: ResumeRecord;
         error?: { message?: string };
       };
-      const templateResult = (await templateResponse.json()) as { templates?: ResumeTemplate[] };
       if (!resumeResponse.ok || !resumeResult.resume) {
         throw new Error(resumeResult.error?.message ?? "无法打开这份简历");
+      }
+      const templateQuery = new URLSearchParams({ track: resumeResult.resume.track });
+      if (resumeResult.resume.targetProfileId) {
+        templateQuery.set("targetProfileId", resumeResult.resume.targetProfileId);
+      }
+      const templateResponse = await fetch(`/api/templates?${templateQuery}`);
+      const templateResult = (await templateResponse.json()) as {
+        templates?: ResumeTemplate[];
+        error?: { message?: string };
+      };
+      if (!templateResponse.ok) {
+        throw new Error(templateResult.error?.message ?? "模板加载失败");
       }
       setResume(resumeResult.resume);
       setTemplates(templateResult.templates ?? []);
@@ -379,6 +389,10 @@ export function BuilderClient({ resumeId }: { resumeId: string }) {
             <p>{resume.progress >= 85 ? "已接近完成，建议运行一次目标检查。" : "继续补充证据，系统会自动更新进度。"}</p>
           </div>
           <a className={styles.textExport} href={`/api/resumes/${resume.id}/export?format=txt`} download><Download size={15} /> 导出 ATS 文本</a>
+          <div className={styles.nextActions}>
+            <Link href="/web-resume"><Globe2 size={15} /> 网页简历</Link>
+            <Link href="/growth"><BookOpenCheck size={15} /> 成长路线</Link>
+          </div>
         </aside>
 
         <section id="builder-edit" role="tabpanel" className={`${styles.editorPanel} ${mobileView !== "edit" ? styles.mobileHidden : ""}`}>

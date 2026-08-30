@@ -300,6 +300,30 @@
   font-weight: 670;
 }
 
+.nextActions {
+  display: grid;
+  gap: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.nextActions a {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 11px;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: .64rem;
+  font-weight: 680;
+}
+
+.nextActions a:hover {
+  color: var(--brand);
+  background: white;
+}
+
 .editorPanel {
   border-right: 1px solid var(--border);
   background: white;

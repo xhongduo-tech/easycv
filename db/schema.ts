@@ -25,6 +25,12 @@ export const guestSessions = sqliteTable(
   (table) => [index("idx_guest_sessions_user").on(table.userId)],
 );
 
+export const catalogMeta = sqliteTable("catalog_meta", {
+  key: text("key").primaryKey(),
+  version: integer("version").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
 export const templates = sqliteTable(
   "templates",
   {

@@ -38,6 +38,8 @@ export interface TargetRow {
   keywords_json: string;
   priorities_json: string;
   tone: string;
+  source_type: "editorial" | "official" | "mixed";
+  reviewed_at: string;
 }
 
 export function mapResume(row: ResumeRow): ResumeRecord {
@@ -83,5 +85,7 @@ export function mapTarget(row: TargetRow): TargetProfile {
     keywords: JSON.parse(row.keywords_json) as string[],
     priorities: JSON.parse(row.priorities_json) as string[],
     tone: row.tone,
+    sourceType: row.source_type,
+    reviewedAt: row.reviewed_at,
   };
 }

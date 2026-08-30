@@ -5,12 +5,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
+  BookOpenCheck,
   Building2,
   Clock3,
   Copy,
   FilePlus2,
   FileText,
   GraduationCap,
+  Globe2,
   LayoutGrid,
   List,
   LoaderCircle,
@@ -26,14 +28,14 @@ import {
 import { ResumePreview } from "@/components/resume-preview";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
-import { templates } from "@/lib/sample-data";
 import { formatDate } from "@/lib/utils";
-import type { ResumeRecord, Track } from "@/types/resume";
+import type { ResumeRecord, ResumeTemplate, Track } from "@/types/resume";
 import styles from "./dashboard.module.css";
 
 export function DashboardClient() {
   const router = useRouter();
   const [resumes, setResumes] = useState<ResumeRecord[]>([]);
+  const [templates, setTemplates] = useState<ResumeTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
@@ -45,10 +47,16 @@ export function DashboardClient() {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch("/api/resumes");
-      const result = (await response.json()) as { resumes?: ResumeRecord[]; error?: { message?: string } };
-      if (!response.ok) throw new Error(result.error?.message ?? "工作台加载失败");
+      const [resumeResponse, templateResponse] = await Promise.all([
+        fetch("/api/resumes"),
+        fetch("/api/templates"),
+      ]);
+      const result = (await resumeResponse.json()) as { resumes?: ResumeRecord[]; error?: { message?: string } };
+      const templateResult = (await templateResponse.json()) as { templates?: ResumeTemplate[]; error?: { message?: string } };
+      if (!resumeResponse.ok) throw new Error(result.error?.message ?? "工作台加载失败");
+      if (!templateResponse.ok) throw new Error(templateResult.error?.message ?? "模板加载失败");
       setResumes(result.resumes ?? []);
+      setTemplates(templateResult.templates ?? []);
     } catch (reason) {
       setError((reason as Error).message);
     } finally {
@@ -152,6 +160,11 @@ export function DashboardClient() {
             <article><span><GraduationCap size={18} /></span><div><strong>{stats.study}</strong><small>留学申请</small></div></article>
             <article><span><Building2 size={18} /></span><div><strong>{stats.career}</strong><small>毕业求职</small></div></article>
             <article><span><Sparkles size={18} /></span><div><strong>{stats.average}%</strong><small>平均完整度</small></div></article>
+          </div>
+
+          <div className={styles.extensionGrid}>
+            <Link href="/web-resume"><span><Globe2 size={19} /></span><div><strong>发布网页简历</strong><small>导出 GitHub Pages 单文件</small></div><ArrowRight size={16} /></Link>
+            <Link href="/growth"><span><BookOpenCheck size={19} /></span><div><strong>查看成长路线</strong><small>按目标补强课程、证书与作品</small></div><ArrowRight size={16} /></Link>
           </div>
 
           <div className={styles.contentHeader}>

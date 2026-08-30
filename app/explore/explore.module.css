@@ -207,6 +207,88 @@
   background: transparent;
 }
 
+.groupChooser {
+  padding: 16px;
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: white;
+}
+
+.groupChooser > div:first-child,
+.targetLevelTitle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.groupChooser > div:first-child > span,
+.targetLevelTitle > span {
+  font-size: 0.75rem;
+  font-weight: 780;
+}
+
+.groupChooser > div:first-child > small,
+.targetLevelTitle > small {
+  color: var(--muted);
+  font-size: 0.64rem;
+}
+
+.groupChooser > div:nth-child(2) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 13px;
+}
+
+.groupChooser button {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  color: var(--ink);
+  background: var(--surface-alt);
+}
+
+.groupChooser button strong {
+  font-size: 0.68rem;
+}
+
+.groupChooser button small {
+  color: var(--muted);
+  font-size: 0.58rem;
+}
+
+.groupChooser button:hover {
+  border-color: var(--brand);
+}
+
+.groupChooser .activeGroup {
+  border-color: var(--brand);
+  color: white;
+  background: var(--brand);
+}
+
+.groupChooser .activeGroup small {
+  color: rgba(255, 255, 255, 0.76);
+}
+
+.groupChooser > p {
+  margin: 11px 0 0;
+  color: var(--muted);
+  font-size: 0.66rem;
+  line-height: 1.5;
+}
+
+.targetLevelTitle {
+  margin-top: 18px;
+}
+
 .targetGrid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -410,6 +492,24 @@
   font-size: 0.6rem;
 }
 
+.recommendedFlag {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  color: var(--brand-dark);
+  background: var(--lime);
+  font-size: 0.52rem;
+  font-weight: 800;
+}
+
+.templateGrid .check {
+  top: auto;
+  right: 7px;
+  bottom: 7px;
+}
+
 .summaryPanel {
   border-left: 1px solid var(--border);
   background: #ebe9e4;
@@ -535,6 +635,14 @@
   color: var(--brand-dark);
   background: var(--brand-soft);
   font-size: 0.56rem;
+}
+
+.targetInsight em {
+  display: block;
+  margin-top: 11px;
+  color: var(--muted-2);
+  font-size: 0.56rem;
+  font-style: normal;
 }
 
 .disclaimer {
@@ -700,6 +808,27 @@
   .optionGrid,
   .templateGrid {
     grid-template-columns: 1fr;
+  }
+
+  .searchBox input,
+  .customTarget input,
+  .optionGrid select {
+    font-size: 16px;
+  }
+
+  .groupChooser {
+    padding: 14px;
+  }
+
+  .groupChooser > div:nth-child(2) {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
+  }
+
+  .groupChooser button {
+    flex: none;
   }
 
   .stepBlock {

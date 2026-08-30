@@ -112,6 +112,8 @@ export interface TargetProfile {
   keywords: string[];
   priorities: string[];
   tone: string;
+  sourceType?: "editorial" | "official" | "mixed";
+  reviewedAt?: string;
 }
 
 export interface AdvisorResult {

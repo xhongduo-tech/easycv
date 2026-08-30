@@ -115,6 +115,15 @@ export const resumeListQuerySchema = z
 export const templateListQuerySchema = z
   .object({
     track: trackSchema.optional(),
+    targetProfileId: requiredText("目标画像 ID", 100).optional(),
+  })
+  .strict();
+
+export const targetListQuerySchema = z
+  .object({
+    track: trackSchema.optional(),
+    group: optionalText(100).optional(),
+    q: optionalText(120).optional(),
   })
   .strict();
 
@@ -122,7 +131,14 @@ export const resumeIdParamSchema = z.object({ id: z.string().uuid("简历 ID 格
 
 export const exportQuerySchema = z
   .object({
-    format: z.enum(["txt", "json"]).default("txt"),
+    format: z.enum(["txt", "json", "github-pages"]).default("txt"),
+    includeContact: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
+  })
+  .strict();
+
+export const growthRecommendationRequestSchema = z
+  .object({
+    resumeId: z.string().uuid("简历 ID 格式不正确"),
   })
   .strict();
 

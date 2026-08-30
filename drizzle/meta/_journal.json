@@ -8,6 +8,13 @@
       "when": 1788093317515,
       "tag": "0000_silly_thanos",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1788097200000,
+      "tag": "0001_catalog_meta",
+      "breakpoints": true
     }
   ]
 }
