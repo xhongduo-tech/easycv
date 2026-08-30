@@ -1,0 +1,69 @@
+.page { background: var(--canvas); }
+.dashboard { min-height: 760px; padding: 68px 0 110px; }
+.welcome { display: flex; align-items: flex-end; justify-content: space-between; gap: 34px; }
+.welcome h1 { margin: 0; font-size: clamp(2.5rem, 4.5vw, 4.2rem); line-height: 1.05; letter-spacing: -0.065em; }
+.welcome > div:first-child > p:last-child { margin: 16px 0 0; color: var(--muted); }
+.createActions { display: flex; flex: none; gap: 9px; }
+.statsGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 46px 0 58px; }
+.statsGrid article { display: flex; align-items: center; gap: 14px; padding: 20px; border: 1px solid var(--border); border-radius: 16px; background: white; }
+.statsGrid article > span { display: grid; width: 42px; height: 42px; place-items: center; border-radius: 12px; color: var(--brand); background: var(--brand-soft); }
+.statsGrid article > div { display: flex; flex-direction: column; gap: 3px; }
+.statsGrid strong { font-size: 1.3rem; letter-spacing: -0.04em; }
+.statsGrid small { color: var(--muted); font-size: 0.67rem; }
+.contentHeader { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
+.contentHeader > div:first-child { display: flex; align-items: center; gap: 10px; }
+.contentHeader h2 { margin: 0; font-size: 1.25rem; }
+.contentHeader > div:first-child span { padding: 5px 7px; border-radius: 99px; color: var(--brand); background: var(--brand-soft); font-size: 0.61rem; font-weight: 700; }
+.toolbar { display: flex; align-items: center; gap: 8px; }
+.toolbar > label { display: flex; height: 40px; align-items: center; gap: 7px; padding: 0 11px; border: 1px solid var(--border); border-radius: 9px; background: white; }
+.toolbar label svg { color: var(--muted); }
+.toolbar input { width: 165px; border: 0; outline: 0; background: transparent; font-size: 0.7rem; }
+.filters, .views { display: flex; padding: 3px; border: 1px solid var(--border); border-radius: 9px; background: white; }
+.filters button, .views button { min-height: 32px; padding: 0 10px; border-radius: 6px; cursor: pointer; color: var(--muted); background: transparent; font-size: 0.65rem; font-weight: 670; }
+.views button { display: grid; width: 32px; padding: 0; place-items: center; }
+.filters .filterActive, .views .viewActive { color: var(--brand); background: var(--brand-soft); }
+.resumeGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; padding-top: 24px; }
+.resumeCard { position: relative; overflow: hidden; border: 1px solid var(--border); border-radius: 18px; background: white; transition: transform 160ms ease, box-shadow 160ms ease; }
+.resumeCard:hover { box-shadow: var(--shadow-md); transform: translateY(-4px); }
+.previewButton { position: relative; display: block; width: 100%; height: 270px; overflow: hidden; padding: 24px 42px 0; cursor: pointer; background: linear-gradient(145deg, #e7e2f7, #eef5e2); }
+.previewButton .preview { min-width: 210px; }
+.trackTag { position: absolute; top: 13px; left: 13px; display: flex; align-items: center; gap: 5px; padding: 6px 8px; border-radius: 99px; color: var(--ink); background: rgba(255,255,255,.88); font-size: .57rem; font-weight: 730; backdrop-filter: blur(8px); }
+.cardBody { position: relative; padding: 19px; }
+.cardTitle { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.cardTitle h3 { overflow: hidden; margin: 0 0 6px; font-size: .92rem; text-overflow: ellipsis; white-space: nowrap; }
+.cardTitle > div { min-width: 0; }
+.cardTitle > div > span { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: .61rem; }
+.cardTitle details { position: relative; }
+.cardTitle summary { display: grid; width: 31px; height: 31px; list-style: none; place-items: center; cursor: pointer; border-radius: 8px; color: var(--muted); }
+.cardTitle summary::-webkit-details-marker { display: none; }
+.cardTitle summary:hover { background: var(--surface-alt); }
+.cardTitle details > div { position: absolute; z-index: 10; top: 34px; right: 0; display: grid; width: 145px; padding: 6px; border: 1px solid var(--border); border-radius: 10px; background: white; box-shadow: var(--shadow-md); }
+.cardTitle details button { display: flex; min-height: 35px; align-items: center; gap: 7px; padding: 0 9px; border-radius: 6px; cursor: pointer; background: transparent; font-size: .63rem; text-align: left; }
+.cardTitle details button:hover { background: var(--surface-alt); }
+.cardTitle details .deleteAction { color: var(--danger); }
+.cardMeta { display: flex; align-items: center; justify-content: space-between; margin: 17px 0 12px; color: var(--muted-2); font-size: .57rem; }
+.cardMeta span:first-child { display: flex; align-items: center; gap: 4px; }
+.progressRow { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 9px; }
+.progressRow i { height: 5px; overflow: hidden; border-radius: 10px; background: var(--brand-soft); }
+.progressRow i span { display: block; height: 100%; border-radius: inherit; background: var(--brand); }
+.progressRow strong { color: var(--brand); font-size: .6rem; }
+.cardBody > a { display: flex; min-height: 35px; align-items: center; justify-content: space-between; margin-top: 13px; padding-top: 11px; border-top: 1px solid var(--border); color: var(--brand); font-size: .65rem; font-weight: 720; }
+.busy { position: absolute; inset: 0; display: grid; place-items: center; color: var(--brand); background: rgba(255,255,255,.82); }
+.resumeList { display: grid; gap: 10px; padding-top: 24px; }
+.resumeList .resumeCard { display: grid; grid-template-columns: 130px 1fr; }
+.resumeList .previewButton { height: 150px; padding: 18px 23px 0; }
+.resumeList .cardBody { display: grid; grid-template-columns: 1fr auto; align-content: center; gap: 5px 30px; }
+.resumeList .cardMeta, .resumeList .progressRow { grid-column: 1; }
+.resumeList .cardBody > a { grid-column: 2; grid-row: 1 / span 3; align-self: center; min-width: 110px; justify-content: center; gap: 8px; padding: 10px; margin: 0; border: 0; border-radius: 9px; background: var(--brand-soft); }
+.loading, .empty { display: flex; min-height: 390px; flex-direction: column; align-items: center; justify-content: center; gap: 11px; text-align: center; }
+.loading { color: var(--brand); }
+.loading strong { color: var(--ink); }
+.empty > span { display: grid; width: 64px; height: 64px; place-items: center; border-radius: 19px; color: var(--brand); background: var(--brand-soft); }
+.empty h2 { margin: 8px 0 0; font-size: 1.25rem; }
+.empty p { margin: 0 0 10px; color: var(--muted); font-size: .8rem; }
+.error { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 14px; margin-top: 18px; border-radius: 10px; color: var(--danger); background: var(--coral-soft); font-size: .7rem; }
+.error button { display: flex; align-items: center; gap: 5px; cursor: pointer; color: inherit; background: transparent; font-size: .65rem; font-weight: 700; }
+.spin { animation: spin .9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (max-width: 980px) { .welcome { align-items: flex-start; flex-direction: column; } .statsGrid { grid-template-columns: 1fr 1fr; } .contentHeader { align-items: flex-start; flex-direction: column; } .resumeGrid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 680px) { .dashboard { padding-top: 48px; } .createActions { display: grid; width: 100%; } .statsGrid { gap: 8px; margin: 34px 0 44px; } .statsGrid article { padding: 14px; } .toolbar { width: 100%; flex-wrap: wrap; } .toolbar > label { width: 100%; } .toolbar input { width: 100%; } .resumeGrid { grid-template-columns: 1fr; } .resumeList .resumeCard { grid-template-columns: 100px 1fr; } .resumeList .previewButton { height: 130px; padding-inline: 15px; } .resumeList .cardBody { display: block; } .resumeList .cardBody > a { margin-top: 10px; } }
