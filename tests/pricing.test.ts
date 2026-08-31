@@ -6,6 +6,7 @@ import {
   publicCreditPacks,
   SIGNUP_AI_CREDITS,
 } from "@/lib/pricing";
+import { DEEPSEEK_INPUT_TOKEN_UPPER_BOUND } from "@/lib/deepseek-advisor";
 
 describe("AI credit pricing", () => {
   it("keeps larger packs progressively cheaper without making them free", () => {
@@ -36,14 +37,14 @@ describe("AI credit pricing", () => {
       outputTokens: 1_000,
     })).toBe(21_400);
     const conservativeFlashUpperBound = estimateDeepSeekCostMicros("deepseek-v4-flash", {
-      inputTokens: 42_000,
+      inputTokens: DEEPSEEK_INPUT_TOKEN_UPPER_BOUND,
       cachedInputTokens: 0,
       outputTokens: 2_200,
     });
     const cheapestUnitPriceMicros = Math.min(
       ...AI_CREDIT_PACKS.map((pack) => pack.priceFen * 10_000 / pack.credits),
     );
-    expect(conservativeFlashUpperBound).toBe(145_800);
+    expect(conservativeFlashUpperBound).toBe(169_800);
     expect(conservativeFlashUpperBound).toBeLessThan(cheapestUnitPriceMicros / 2);
     expect(isOneCreditDeepSeekModel("deepseek-v4-flash")).toBe(true);
     expect(isOneCreditDeepSeekModel("deepseek-v4-pro")).toBe(false);

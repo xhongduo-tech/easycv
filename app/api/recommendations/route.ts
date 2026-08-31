@@ -19,9 +19,12 @@ import { mapResume, mapTarget, mapTargetBrief, type ResumeRow, type TargetBriefR
 import { analyzeJobFit } from "@/lib/job-fit";
 import {
   createDeepSeekAdvice,
+  DEEPSEEK_MAX_OUTPUT_TOKENS,
   DeepSeekAdvisorError,
   getDeepSeekDailyBudgetMicros,
   getDeepSeekAdvisorConfig,
+  isDeepSeekAdviceRequestWithinInputBudget,
+  prepareDeepSeekAdviceRequest,
   shouldResetDeepSeekCircuit,
   shouldTripDeepSeekCircuit,
 } from "@/lib/deepseek-advisor";
@@ -303,10 +306,29 @@ export async function POST(request: Request) {
           requirementsText: targetBrief.requirementsText,
         } : undefined,
       })).byteLength;
+      const advisorInput = {
+        content,
+        track,
+        targetName: target?.name ?? targetName ?? (track === "study" ? "目标院校" : "目标企业"),
+        target,
+        targetBrief,
+        section,
+        rewriteFocus,
+        signal: request.signal,
+      };
+      const preparedModelRequest = modelInputBytes <= MAX_MODEL_INPUT_BYTES
+        ? prepareDeepSeekAdviceRequest(advisorInput, modelConfig)
+        : null;
       if (access.creditBalance < 1) {
         modelFallback = true;
         fallbackReason = session.kind === "guest" ? "login-required" : "no-credits";
       } else if (modelInputBytes > MAX_MODEL_INPUT_BYTES) {
+        modelFallback = true;
+        fallbackReason = "input-too-large";
+      } else if (
+        !preparedModelRequest
+        || !isDeepSeekAdviceRequestWithinInputBudget(preparedModelRequest)
+      ) {
         modelFallback = true;
         fallbackReason = "input-too-large";
       } else if (await isProviderCircuitOpen(db, providerKey)) {
@@ -408,19 +430,15 @@ export async function POST(request: Request) {
                       session.userId,
                       modelConfig.model,
                       creditReservation?.id ?? null,
-                      modelInputBytes,
+                      preparedModelRequest.inputTokenUpperBound,
                       ownerAttempt.lease.leaseId,
                     )) throw new ModelBudgetExceededError();
-                    const modelResult = await createDeepSeekAdvice({
-                      content,
-                      track,
-                      targetName: target?.name ?? targetName ?? (track === "study" ? "目标院校" : "目标企业"),
-                      target,
-                      targetBrief,
-                      section,
-                      rewriteFocus,
-                      signal: request.signal,
-                    }, modelConfig);
+                    const modelResult = await createDeepSeekAdvice(
+                      advisorInput,
+                      modelConfig,
+                      undefined,
+                      preparedModelRequest,
+                    );
                     const { modelUsage, ...modelAdvice } = modelResult;
                     billableUsage = modelUsage;
                     const deliveryCreatedAt = new Date();
@@ -469,7 +487,11 @@ export async function POST(request: Request) {
                       usage: error instanceof DeepSeekAdvisorError ? error.usage : billableUsage,
                     };
                     modelFallback = true;
-                    fallbackReason = error instanceof ModelBudgetExceededError ? "rate-limit" : "provider-error";
+                    fallbackReason = error instanceof ModelBudgetExceededError
+                      ? "rate-limit"
+                      : error instanceof DeepSeekAdvisorError && error.kind === "input-too-large"
+                        ? "input-too-large"
+                        : "provider-error";
                     if (!request.signal.aborted && shouldTripDeepSeekCircuit(error)) {
                       await recordProviderFailure(db, providerKey).catch(() => undefined);
                     } else if (shouldResetDeepSeekCircuit(error)) {
@@ -837,16 +859,16 @@ async function recordModelRunStart(
   userId: string,
   model: string,
   creditLedgerId: string | null,
-  modelInputBytes: number,
+  reservedInputTokens: number,
   ownerLeaseId: string,
 ) {
   // Keep a conservative cost reservation while the provider is running. If
   // usage is unavailable after a timeout or provider error, this upper-bound
   // remains in the daily budget instead of silently counting the call as free.
   const reservedUsage: ModelTokenUsage = {
-    inputTokens: Math.min(modelInputBytes, MAX_MODEL_INPUT_BYTES) + 10_000,
+    inputTokens: reservedInputTokens,
     cachedInputTokens: 0,
-    outputTokens: 2_200,
+    outputTokens: DEEPSEEK_MAX_OUTPUT_TOKENS,
   };
   if (!creditLedgerId) return false;
   const now = new Date();
