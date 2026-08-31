@@ -3,6 +3,7 @@ node_modules/
 out/
 .env*
 !.env.example
+.dev.vars*
 npm-debug.log*
 .DS_Store
 coverage/

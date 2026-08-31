@@ -672,8 +672,8 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
           <div className={styles.modelMode}>
             {modelAvailable ? (
               <>
-                <label><input type="checkbox" checked={allowExternalModel} onChange={(event) => { setAllowExternalModel(event.target.checked); setAdvice(null); }} /><span><Check size={12} /></span>使用 OpenAI 大模型</label>
-                <small>仅在你点击“优化”时发送当前章节、目标，以及你已填写的岗位描述；简历联系方式、地点、项目链接不发送，岗位文本中的常见邮箱、电话和微信号会先移除。请求设为不存储响应。</small>
+                <label><input type="checkbox" checked={allowExternalModel} onChange={(event) => { setAllowExternalModel(event.target.checked); setAdvice(null); }} /><span><Check size={12} /></span>使用 DeepSeek 大模型</label>
+                <small>仅在你点击“优化”时发送当前章节、目标，以及你已填写的岗位描述；简历联系方式、地点、项目链接不发送，岗位文本中的常见邮箱、电话和微信号会先移除。当前只发送文字，不会发送截图或本地文件。</small>
               </>
             ) : (
               <p>当前环境尚未配置模型凭据，先使用基础分析；结果会明确标注，不冒充大模型。</p>
@@ -693,7 +693,7 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
               <div className={styles.adviceResultHeader}>
                 <span>{targetedAdvice ? "本次针对的岗位要求" : "当前内容检查"}</span>
                 <h2 ref={adviceResultRef} tabIndex={-1}>{targetedAdvice ? advice.rewriteProposals.find((proposal) => proposal.requirement)?.requirement : advice.headline}</h2>
-                <small>{advice.provider === "local-rules" ? (advice.modelFallback && advice.fallbackReason ? modelFallbackLabels[advice.fallbackReason] : "当前使用基础分析；不会冒充大模型结果") : "OpenAI 生成草稿；应用前仍需逐条确认"}</small>
+                <small>{advice.provider === "local-rules" ? (advice.modelFallback && advice.fallbackReason ? modelFallbackLabels[advice.fallbackReason] : "当前使用基础分析；不会冒充大模型结果") : "DeepSeek 生成建议；应用前仍需逐条确认"}</small>
               </div>
               {advice.rewriteProposals.length > 0 ? (
                 <div className={styles.rewriteProposalList}>

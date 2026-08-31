@@ -12,23 +12,28 @@ import { apiError, parseRequest, rejectCrossOrigin, withApiError } from "@/lib/a
 import { mapResume, mapTarget, mapTargetBrief, type ResumeRow, type TargetBriefRow, type TargetRow } from "@/lib/db-mappers";
 import { analyzeJobFit } from "@/lib/job-fit";
 import {
-  createOpenAIAdvice,
-  getOpenAIAdvisorConfig,
-  shouldResetOpenAICircuit,
-  shouldTripOpenAICircuit,
-} from "@/lib/openai-advisor";
+  createDeepSeekAdvice,
+  getDeepSeekAdvisorConfig,
+  shouldResetDeepSeekCircuit,
+  shouldTripDeepSeekCircuit,
+} from "@/lib/deepseek-advisor";
 import { sameSourceRef, type RewriteFocus } from "@/lib/rewrite-proposals";
 import { recommendationRequestSchema } from "@/lib/validation";
 
 const MAX_MODEL_INPUT_BYTES = 60_000;
 const MODEL_CONCURRENCY = 4;
-const MODEL_CONSENT_VERSION = "resume-model-processing-v2";
+const MODEL_CONSENT_VERSION = "resume-model-processing-deepseek-v1";
 
 type ModelFallbackReason = "input-too-large" | "rate-limit" | "concurrency" | "provider-error";
 
 export async function GET() {
+  const modelConfig = getDeepSeekAdvisorConfig(env);
   return NextResponse.json(
-    { modelAvailable: Boolean(getOpenAIAdvisorConfig(env)) },
+    {
+      modelAvailable: Boolean(modelConfig),
+      modelProvider: modelConfig ? "deepseek" : null,
+      modelSupportsImages: modelConfig?.model === "deepseek-v4-flash-vision-exp",
+    },
     { headers: { "cache-control": "private, no-store" } },
   );
 }
@@ -94,14 +99,14 @@ export async function POST(request: Request) {
       return withSessionCookie(apiError(429, "RATE_LIMITED", "建议请求过于频繁，请稍后再试"), session);
     }
 
-    const modelConfig = getOpenAIAdvisorConfig(env);
+    const modelConfig = getDeepSeekAdvisorConfig(env);
     let provider = "local-rules";
     let modelFallback = false;
     let fallbackReason: ModelFallbackReason | undefined;
     let result = createAdvice(content, track, target, section, targetBrief, rewriteFocus);
 
     if (parsed.data.allowExternalModel && modelConfig) {
-      const providerKey = `openai:${modelConfig.model}`;
+      const providerKey = `deepseek:${modelConfig.model}`;
       const modelInputBytes = new TextEncoder().encode(JSON.stringify({
         content,
         targetBrief: targetBrief ? {
@@ -143,7 +148,7 @@ export async function POST(request: Request) {
                 fallbackReason = "provider-error";
               } else {
                 try {
-                  result = await createOpenAIAdvice({
+                  result = await createDeepSeekAdvice({
                     content,
                     track,
                     targetName: target?.name ?? targetName ?? (track === "study" ? "目标院校" : "目标企业"),
@@ -158,9 +163,9 @@ export async function POST(request: Request) {
                 } catch (error) {
                   modelFallback = true;
                   fallbackReason = "provider-error";
-                  if (!request.signal.aborted && shouldTripOpenAICircuit(error)) {
+                  if (!request.signal.aborted && shouldTripDeepSeekCircuit(error)) {
                     await recordProviderFailure(db, providerKey).catch(() => undefined);
-                  } else if (shouldResetOpenAICircuit(error)) {
+                  } else if (shouldResetDeepSeekCircuit(error)) {
                     await resetProviderCircuit(db, providerKey).catch(() => undefined);
                   }
                 }

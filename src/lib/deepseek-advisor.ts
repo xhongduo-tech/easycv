@@ -11,39 +11,41 @@ import {
 } from "@/lib/rewrite-proposals";
 import type { AdvisorResult, AdvisorSection, ResumeContent, RewriteSourceRef, TargetBrief, TargetProfile, Track } from "@/types/resume";
 
-export interface OpenAIAdvisorConfig {
+export interface DeepSeekAdvisorConfig {
   apiKey: string;
+  baseUrl: string;
   model: string;
 }
 
-export type OpenAIAdvisorErrorKind =
+export type DeepSeekAdvisorErrorKind =
   | "cancelled"
   | "timeout"
   | "network"
   | "rate-limit"
   | "server"
+  | "configuration"
   | "client"
   | "refusal"
   | "invalid-output";
 
-export class OpenAIAdvisorError extends Error {
-  constructor(public readonly kind: OpenAIAdvisorErrorKind, message: string) {
+export class DeepSeekAdvisorError extends Error {
+  constructor(public readonly kind: DeepSeekAdvisorErrorKind, message: string) {
     super(message);
-    this.name = "OpenAIAdvisorError";
+    this.name = "DeepSeekAdvisorError";
   }
 }
 
-export function shouldTripOpenAICircuit(error: unknown) {
-  return error instanceof OpenAIAdvisorError
-    && ["timeout", "network", "rate-limit", "server"].includes(error.kind);
+export function shouldTripDeepSeekCircuit(error: unknown) {
+  return error instanceof DeepSeekAdvisorError
+    && ["timeout", "network", "rate-limit", "server", "configuration"].includes(error.kind);
 }
 
-export function shouldResetOpenAICircuit(error: unknown) {
-  return error instanceof OpenAIAdvisorError
+export function shouldResetDeepSeekCircuit(error: unknown) {
+  return error instanceof DeepSeekAdvisorError
     && ["client", "refusal", "invalid-output"].includes(error.kind);
 }
 
-interface OpenAIAdvisorInput {
+interface DeepSeekAdvisorInput {
   content: ResumeContent;
   track: Track;
   targetName: string;
@@ -146,16 +148,28 @@ const advisorJsonSchema = {
   required: ["score", "headline", "suggestions", "keywords", "rewrite", "rewriteProposals"],
 } as const;
 
-export function getOpenAIAdvisorConfig(runtimeEnv: unknown): OpenAIAdvisorConfig | null {
-  const values = runtimeEnv as { OPENAI_API_KEY?: unknown; OPENAI_MODEL?: unknown };
-  const apiKey = typeof values.OPENAI_API_KEY === "string" ? values.OPENAI_API_KEY.trim() : "";
-  const model = typeof values.OPENAI_MODEL === "string" ? values.OPENAI_MODEL.trim() : "";
-  return apiKey && model ? { apiKey, model } : null;
+const supportedDeepSeekModels = new Set([
+  "deepseek-v4-flash",
+  "deepseek-v4-pro",
+  "deepseek-v4-flash-vision-exp",
+]);
+
+export function getDeepSeekAdvisorConfig(runtimeEnv: unknown): DeepSeekAdvisorConfig | null {
+  const values = runtimeEnv as {
+    DEEPSEEK_API_KEY?: unknown;
+    DEEPSEEK_BASE_URL?: unknown;
+    DEEPSEEK_MODEL?: unknown;
+  };
+  const apiKey = typeof values.DEEPSEEK_API_KEY === "string" ? values.DEEPSEEK_API_KEY.trim() : "";
+  const rawBaseUrl = typeof values.DEEPSEEK_BASE_URL === "string" ? values.DEEPSEEK_BASE_URL.trim() : "";
+  const model = typeof values.DEEPSEEK_MODEL === "string" ? values.DEEPSEEK_MODEL.trim() : "";
+  const baseUrl = normalizeDeepSeekBaseUrl(rawBaseUrl);
+  return apiKey && baseUrl && supportedDeepSeekModels.has(model) ? { apiKey, baseUrl, model } : null;
 }
 
-export async function createOpenAIAdvice(
-  input: OpenAIAdvisorInput,
-  config: OpenAIAdvisorConfig,
+export async function createDeepSeekAdvice(
+  input: DeepSeekAdvisorInput,
+  config: DeepSeekAdvisorConfig,
   fetcher: typeof fetch = fetch,
 ): Promise<AdvisorResult> {
   const jobFit = input.track === "career" && input.targetBrief?.requirementsText
@@ -177,8 +191,9 @@ export async function createOpenAIAdvice(
   try {
     let response: Response;
     try {
-      response = await fetcher("https://api.openai.com/v1/responses", {
+      response = await fetcher(`${config.baseUrl}/responses`, {
         method: "POST",
+        redirect: "error",
         headers: {
           authorization: `Bearer ${config.apiKey}`,
           "content-type": "application/json",
@@ -186,7 +201,7 @@ export async function createOpenAIAdvice(
         signal: controller.signal,
         body: JSON.stringify({
           model: config.model,
-          store: false,
+          reasoning: { effort: "none" },
           max_output_tokens: 2_200,
           instructions: [
             "你是严谨的中文简历编辑助手。只依据用户提供的事实给出建议，不得虚构学校、成绩、职责、数字、奖项或结果。",
@@ -238,46 +253,64 @@ export async function createOpenAIAdvice(
             format: {
               type: "json_schema",
               name: "resume_advice",
-              strict: true,
               schema: advisorJsonSchema,
             },
           },
         }),
       });
     } catch (error) {
-      if (timedOut) throw new OpenAIAdvisorError("timeout", "OpenAI request timed out");
-      if (input.signal?.aborted) throw new OpenAIAdvisorError("cancelled", "OpenAI request was cancelled");
-      throw new OpenAIAdvisorError("network", error instanceof Error ? error.message : "OpenAI network failure");
+      if (timedOut) throw new DeepSeekAdvisorError("timeout", "DeepSeek request timed out");
+      if (input.signal?.aborted) throw new DeepSeekAdvisorError("cancelled", "DeepSeek request was cancelled");
+      throw new DeepSeekAdvisorError("network", error instanceof Error ? error.message : "DeepSeek network failure");
     }
     if (!response.ok) {
-      const kind: OpenAIAdvisorErrorKind = response.status === 429
+      const kind: DeepSeekAdvisorErrorKind = response.status === 429
         ? "rate-limit"
+        : [401, 402, 403, 404].includes(response.status)
+          ? "configuration"
         : response.status >= 500
           ? "server"
           : "client";
-      throw new OpenAIAdvisorError(kind, `OpenAI request failed (${response.status})`);
+      throw new DeepSeekAdvisorError(kind, `DeepSeek request failed (${response.status})`);
     }
     let payload: {
+      status?: "completed" | "failed" | "incomplete";
+      error?: { code?: string; message?: string } | null;
+      incomplete_details?: { reason?: "max_output_tokens" | "content_filter" } | null;
       output?: Array<{ type?: string; content?: Array<{ type?: string; text?: string; refusal?: string }> }>;
     };
     try {
       payload = await response.json() as typeof payload;
     } catch (error) {
-      if (timedOut) throw new OpenAIAdvisorError("timeout", "OpenAI response body timed out");
-      if (input.signal?.aborted) throw new OpenAIAdvisorError("cancelled", "OpenAI response body was cancelled");
+      if (timedOut) throw new DeepSeekAdvisorError("timeout", "DeepSeek response body timed out");
+      if (input.signal?.aborted) throw new DeepSeekAdvisorError("cancelled", "DeepSeek response body was cancelled");
       if (error instanceof SyntaxError) {
-        throw new OpenAIAdvisorError("invalid-output", "OpenAI response was not valid JSON");
+        throw new DeepSeekAdvisorError("invalid-output", "DeepSeek response was not valid JSON");
       }
-      throw new OpenAIAdvisorError(
+      throw new DeepSeekAdvisorError(
         "network",
-        error instanceof Error ? error.message : "OpenAI response body could not be read",
+        error instanceof Error ? error.message : "DeepSeek response body could not be read",
+      );
+    }
+    if (payload.status === "failed") {
+      const code = payload.error?.code?.toLowerCase() ?? "";
+      const kind: DeepSeekAdvisorErrorKind = /auth|balance|credit|model|permission/.test(code)
+        ? "configuration"
+        : "server";
+      throw new DeepSeekAdvisorError(kind, "DeepSeek response failed");
+    }
+    if (payload.status === "incomplete") {
+      const reason = payload.incomplete_details?.reason;
+      throw new DeepSeekAdvisorError(
+        reason === "content_filter" ? "refusal" : "invalid-output",
+        reason === "content_filter" ? "DeepSeek declined this request" : "DeepSeek response was incomplete",
       );
     }
     const refused = payload.output
       ?.filter((item) => item.type === "message")
       .flatMap((item) => item.content ?? [])
       .some((item) => item.type === "refusal");
-    if (refused) throw new OpenAIAdvisorError("refusal", "OpenAI declined this request");
+    if (refused) throw new DeepSeekAdvisorError("refusal", "DeepSeek declined this request");
     const outputText = payload.output
       ?.filter((item) => item.type === "message")
       .flatMap((item) => item.content ?? [])
@@ -285,7 +318,7 @@ export async function createOpenAIAdvice(
       .map((item) => item.text ?? "")
       .join("")
       .trim();
-    if (!outputText) throw new OpenAIAdvisorError("invalid-output", "OpenAI response did not contain structured text");
+    if (!outputText) throw new DeepSeekAdvisorError("invalid-output", "DeepSeek response did not contain structured text");
     try {
       const parsed = advisorResultSchema.parse(JSON.parse(outputText));
       const rawProposals = parsed.rewriteProposals.map(normalizeRawRewriteProposal);
@@ -303,7 +336,7 @@ export async function createOpenAIAdvice(
           : createLocalRewriteProposals(input.content, input.section, jobFit, input.rewriteFocus),
       };
     } catch {
-      throw new OpenAIAdvisorError("invalid-output", "OpenAI structured output failed validation");
+      throw new DeepSeekAdvisorError("invalid-output", "DeepSeek structured output failed validation");
     }
   } finally {
     clearTimeout(timeout);
@@ -311,7 +344,7 @@ export async function createOpenAIAdvice(
   }
 }
 
-function contentForSection(content: ResumeContent, section: OpenAIAdvisorInput["section"]) {
+function contentForSection(content: ResumeContent, section: DeepSeekAdvisorInput["section"]) {
   const context = { headline: content.basics.headline };
   if (section === "basics") return {
     basics: context,
@@ -342,6 +375,23 @@ function contentForSection(content: ResumeContent, section: OpenAIAdvisorInput["
     languages: content.languages,
     awards: content.awards,
   };
+}
+
+function normalizeDeepSeekBaseUrl(value: string) {
+  try {
+    const url = new URL(value);
+    const valid = url.protocol === "https:"
+      && url.hostname === "api.deepseek.com"
+      && url.port === ""
+      && url.username === ""
+      && url.password === ""
+      && (url.pathname === "" || url.pathname === "/")
+      && url.search === ""
+      && url.hash === "";
+    return valid ? "https://api.deepseek.com" : null;
+  } catch {
+    return null;
+  }
 }
 
 function normalizeRawRewriteProposal(

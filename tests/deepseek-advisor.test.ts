@@ -1,35 +1,64 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  createOpenAIAdvice,
-  getOpenAIAdvisorConfig,
-  shouldTripOpenAICircuit,
-} from "@/lib/openai-advisor";
+  createDeepSeekAdvice,
+  getDeepSeekAdvisorConfig,
+  shouldTripDeepSeekCircuit,
+} from "@/lib/deepseek-advisor";
 import { createStarterContent } from "@/lib/sample-data";
 
-describe("OpenAI resume advisor adapter", () => {
-  it("stays disabled until both server-side settings exist", () => {
-    expect(getOpenAIAdvisorConfig({ OPENAI_API_KEY: "", OPENAI_MODEL: "gpt-test" })).toBeNull();
-    expect(getOpenAIAdvisorConfig({ OPENAI_API_KEY: "secret", OPENAI_MODEL: "" })).toBeNull();
-    expect(getOpenAIAdvisorConfig({ OPENAI_API_KEY: "secret", OPENAI_MODEL: "gpt-test" })).toEqual({
-      apiKey: "secret",
-      model: "gpt-test",
-    });
+const config = {
+  apiKey: "secret",
+  baseUrl: "https://api.deepseek.com",
+  model: "deepseek-v4-flash-vision-exp",
+};
+
+describe("DeepSeek resume advisor adapter", () => {
+  it("requires an allowlisted server-side key, base URL, and model", () => {
+    expect(getDeepSeekAdvisorConfig({})).toBeNull();
+    expect(getDeepSeekAdvisorConfig({
+      DEEPSEEK_API_KEY: "secret",
+      DEEPSEEK_BASE_URL: "https://api.deepseek.com.evil.invalid",
+      DEEPSEEK_MODEL: config.model,
+    })).toBeNull();
+    expect(getDeepSeekAdvisorConfig({
+      DEEPSEEK_API_KEY: "secret",
+      DEEPSEEK_BASE_URL: "https://api.deepseek.com/v1",
+      DEEPSEEK_MODEL: config.model,
+    })).toBeNull();
+    expect(getDeepSeekAdvisorConfig({
+      DEEPSEEK_API_KEY: "secret",
+      DEEPSEEK_BASE_URL: config.baseUrl,
+      DEEPSEEK_MODEL: "unapproved-model",
+    })).toBeNull();
+    expect(getDeepSeekAdvisorConfig({
+      DEEPSEEK_API_KEY: config.apiKey,
+      DEEPSEEK_BASE_URL: config.baseUrl,
+      DEEPSEEK_MODEL: config.model,
+    })).toEqual(config);
   });
 
-  it("uses structured outputs, disables response storage, and sends only the requested section", async () => {
-    const fetcher = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+  it("uses the pinned endpoint, JSON Schema, no thinking, and only the requested section", async () => {
+    const fetcher = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body)) as {
-        store: boolean;
-        text: { format: { type: string; strict: boolean } };
+        reasoning: { effort: string };
+        text: { format: { type: string; strict?: boolean } };
         input: Array<{ content: Array<{ text: string }> }>;
       };
       const submitted = JSON.parse(body.input[0].content[0].text) as { resume: Record<string, unknown> };
-      expect(body.store).toBe(false);
-      expect(body.text.format).toMatchObject({ type: "json_schema", strict: true });
+      expect(String(url)).toBe("https://api.deepseek.com/responses");
+      expect(init?.redirect).toBe("error");
+      expect(body.reasoning).toEqual({ effort: "none" });
+      expect(body.text.format).toMatchObject({ type: "json_schema" });
+      expect(body.text.format).not.toHaveProperty("strict");
+      expect(JSON.stringify(body)).not.toContain(config.apiKey);
       expect(submitted.resume).toHaveProperty("experience");
       expect(submitted.resume).not.toHaveProperty("projects");
       return new Response(JSON.stringify({
+        status: "completed",
         output: [{
+          type: "reasoning",
+          content: [{ type: "reasoning_text", text: "ignored reasoning" }],
+        }, {
           type: "message",
           content: [{
             type: "output_text",
@@ -46,12 +75,12 @@ describe("OpenAI resume advisor adapter", () => {
       }), { status: 200, headers: { "content-type": "application/json" } });
     });
 
-    const result = await createOpenAIAdvice({
+    const result = await createDeepSeekAdvice({
       content: createStarterContent("career"),
       track: "career",
       targetName: "目标企业",
       section: "experience",
-    }, { apiKey: "secret", model: "gpt-test" }, fetcher as typeof fetch);
+    }, config, fetcher as typeof fetch);
 
     expect(result.score).toBe(78);
     expect(result.suggestions[0].title).toBe("明确职责");
@@ -96,12 +125,12 @@ describe("OpenAI resume advisor adapter", () => {
       }), { status: 200, headers: { "content-type": "application/json" } });
     });
 
-    await createOpenAIAdvice({
+    await createDeepSeekAdvice({
       content,
       track: "career",
       targetName: "目标企业",
       section: "overview",
-    }, { apiKey: "secret", model: "gpt-test" }, fetcher as typeof fetch);
+    }, config, fetcher as typeof fetch);
   });
 
   it("sends only extracted, redacted JD requirements and redacts free-text contacts", async () => {
@@ -150,7 +179,7 @@ describe("OpenAI resume advisor adapter", () => {
       }), { status: 200, headers: { "content-type": "application/json" } });
     });
 
-    await createOpenAIAdvice({
+    await createDeepSeekAdvice({
       content,
       track: "career",
       targetName: "目标企业",
@@ -167,7 +196,7 @@ describe("OpenAI resume advisor adapter", () => {
         updatedAt: "2026-08-31T00:00:00.000Z",
       },
       section: "overview",
-    }, { apiKey: "secret", model: "gpt-test" }, fetcher as typeof fetch);
+    }, config, fetcher as typeof fetch);
   });
 
   it("returns only a grounded proposal for the selected requirement and source", async () => {
@@ -221,14 +250,14 @@ describe("OpenAI resume advisor adapter", () => {
       }), { status: 200, headers: { "content-type": "application/json" } });
     });
 
-    const result = await createOpenAIAdvice({
+    const result = await createDeepSeekAdvice({
       content,
       track: "career",
       targetName: "目标企业",
       targetBrief,
       section: "experience",
       rewriteFocus: { requirementId: "requirement-1", sourceRef },
-    }, { apiKey: "secret", model: "gpt-test" }, fetcher as typeof fetch);
+    }, config, fetcher as typeof fetch);
 
     expect(result.rewriteProposals).toHaveLength(1);
     expect(result.rewriteProposals[0]).toMatchObject({
@@ -244,15 +273,15 @@ describe("OpenAI resume advisor adapter", () => {
     const fetcher = vi.fn((_url: string | URL | Request, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
       init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
     }));
-    const pending = createOpenAIAdvice({
+    const pending = createDeepSeekAdvice({
       content: createStarterContent("career"),
       track: "career",
       targetName: "目标企业",
       section: "experience",
       signal: controller.signal,
-    }, { apiKey: "secret", model: "gpt-test" }, fetcher as typeof fetch);
+    }, config, fetcher as typeof fetch);
     controller.abort();
-    await expect(pending).rejects.toMatchObject({ name: "OpenAIAdvisorError", kind: "cancelled" });
+    await expect(pending).rejects.toMatchObject({ name: "DeepSeekAdvisorError", kind: "cancelled" });
   });
 
   it("treats a content refusal as request-scoped rather than a provider outage", async () => {
@@ -262,15 +291,57 @@ describe("OpenAI resume advisor adapter", () => {
         content: [{ type: "refusal", refusal: "Cannot assist with this request." }],
       }],
     }), { status: 200, headers: { "content-type": "application/json" } }));
-    const request = createOpenAIAdvice({
+    const request = createDeepSeekAdvice({
       content: createStarterContent("career"),
       track: "career",
       targetName: "目标企业",
       section: "experience",
-    }, { apiKey: "secret", model: "gpt-test" }, fetcher as typeof fetch);
+    }, config, fetcher as typeof fetch);
     const error = await request.catch((reason: unknown) => reason);
-    expect(error).toMatchObject({ name: "OpenAIAdvisorError", kind: "refusal" });
-    expect(shouldTripOpenAICircuit(error)).toBe(false);
+    expect(error).toMatchObject({ name: "DeepSeekAdvisorError", kind: "refusal" });
+    expect(shouldTripDeepSeekCircuit(error)).toBe(false);
+  });
+
+  it("classifies DeepSeek incomplete responses without opening the provider circuit", async () => {
+    const contentFiltered = createDeepSeekAdvice({
+      content: createStarterContent("career"),
+      track: "career",
+      targetName: "目标企业",
+      section: "experience",
+    }, config, vi.fn(async () => new Response(JSON.stringify({
+      status: "incomplete",
+      incomplete_details: { reason: "content_filter" },
+      output: [],
+    }), { status: 200 })) as typeof fetch).catch((reason: unknown) => reason);
+    const filteredError = await contentFiltered;
+    expect(filteredError).toMatchObject({ name: "DeepSeekAdvisorError", kind: "refusal" });
+    expect(shouldTripDeepSeekCircuit(filteredError)).toBe(false);
+
+    const truncated = createDeepSeekAdvice({
+      content: createStarterContent("career"),
+      track: "career",
+      targetName: "目标企业",
+      section: "experience",
+    }, config, vi.fn(async () => new Response(JSON.stringify({
+      status: "incomplete",
+      incomplete_details: { reason: "max_output_tokens" },
+      output: [],
+    }), { status: 200 })) as typeof fetch).catch((reason: unknown) => reason);
+    const truncatedError = await truncated;
+    expect(truncatedError).toMatchObject({ name: "DeepSeekAdvisorError", kind: "invalid-output" });
+    expect(shouldTripDeepSeekCircuit(truncatedError)).toBe(false);
+  });
+
+  it("treats persistent credential errors as provider configuration failures", async () => {
+    const request = createDeepSeekAdvice({
+      content: createStarterContent("career"),
+      track: "career",
+      targetName: "目标企业",
+      section: "experience",
+    }, config, vi.fn(async () => new Response("", { status: 401 })) as typeof fetch);
+    const error = await request.catch((reason: unknown) => reason);
+    expect(error).toMatchObject({ name: "DeepSeekAdvisorError", kind: "configuration" });
+    expect(shouldTripDeepSeekCircuit(error)).toBe(true);
   });
 
   it("treats a response-body network failure as a provider outage", async () => {
@@ -279,14 +350,14 @@ describe("OpenAI resume advisor adapter", () => {
         controller.error(new TypeError("body network failure"));
       },
     }), { status: 200, headers: { "content-type": "application/json" } }));
-    const request = createOpenAIAdvice({
+    const request = createDeepSeekAdvice({
       content: createStarterContent("career"),
       track: "career",
       targetName: "目标企业",
       section: "experience",
-    }, { apiKey: "secret", model: "gpt-test" }, fetcher as typeof fetch);
+    }, config, fetcher as typeof fetch);
     const error = await request.catch((reason: unknown) => reason);
-    expect(error).toMatchObject({ name: "OpenAIAdvisorError", kind: "network" });
-    expect(shouldTripOpenAICircuit(error)).toBe(true);
+    expect(error).toMatchObject({ name: "DeepSeekAdvisorError", kind: "network" });
+    expect(shouldTripDeepSeekCircuit(error)).toBe(true);
   });
 });
