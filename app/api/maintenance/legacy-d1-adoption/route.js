@@ -32,10 +32,31 @@ async function inspect() {
   return planLegacySchemaAdoption(await inspectLegacyD1(env.DB));
 }
 
+async function inspectPlatformMigrationLedger() {
+  const tables = await env.DB.prepare(`SELECT name FROM sqlite_schema
+    WHERE type = 'table' AND name IN ('__appgarden_migrations', '_cf_KV')
+    ORDER BY name`).all();
+  const tableNames = (tables.results ?? []).map((row) => String(row.name));
+  if (!tableNames.includes("__appgarden_migrations")) return { tableNames };
+  const [columns, rows] = await env.DB.batch([
+    env.DB.prepare("SELECT cid, name, type, notnull, dflt_value, pk FROM pragma_table_info('__appgarden_migrations') ORDER BY cid"),
+    env.DB.prepare("SELECT * FROM __appgarden_migrations LIMIT 50"),
+  ]);
+  return {
+    tableNames,
+    appgardenMigrationColumns: columns.results ?? [],
+    appgardenMigrationRows: rows.results ?? [],
+  };
+}
+
 export async function GET(request) {
   if (!isAuthorized(request)) return json({ status: "error", code: "UNAUTHORIZED" }, 401);
   try {
-    return json({ status: "ok", ...(await inspect()) });
+    return json({
+      status: "ok",
+      ...(await inspect()),
+      platformMetadata: await inspectPlatformMigrationLedger(),
+    });
   } catch (error) {
     console.error(JSON.stringify({
       event: "legacy_d1_bridge_inspection_failed",
