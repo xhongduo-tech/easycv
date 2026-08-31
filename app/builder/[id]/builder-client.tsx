@@ -42,6 +42,7 @@ import {
   X,
 } from "lucide-react";
 import { Brand } from "@/components/brand";
+import { AccountMenu } from "@/components/account-menu";
 import { ResumePreview } from "@/components/resume-preview";
 import { recommendGrowthGaps } from "@/lib/growth-data";
 import { analyzeJobFit, extractRequirements, targetBriefSourceLabels } from "@/lib/job-fit";
@@ -538,6 +539,7 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
             <ChevronDown size={13} />
           </label>
           <button className="button button-primary" type="button" onClick={() => setExportOpen(true)} aria-label="导出 PDF 或网页简历"><Download size={16} /> 导出</button>
+          <div className={styles.builderAccount}><AccountMenu compact returnTo={`/builder/${resume.id}`} /></div>
         </div>
       </header>
 

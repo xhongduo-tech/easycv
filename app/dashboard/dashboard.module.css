@@ -4,6 +4,14 @@
 .welcome h1 { margin: 0; font-size: clamp(2.5rem, 4.5vw, 4.2rem); line-height: 1.05; letter-spacing: -0.065em; }
 .welcome > div:first-child > p:last-child { margin: 16px 0 0; color: var(--muted); }
 .createActions { display: flex; flex: none; gap: 9px; }
+.guestBanner { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px; padding: 16px 18px; margin-top: 34px; border: 1px solid #d6dfc9; border-radius: 15px; background: linear-gradient(120deg, var(--brand-soft), var(--lime-soft)); }
+.guestBanner > span { display: grid; width: 42px; height: 42px; place-items: center; border-radius: 12px; color: var(--brand); background: white; }
+.guestBanner > div:nth-child(2) { display: flex; flex-direction: column; gap: 4px; }
+.guestBanner strong { font-size: .75rem; }
+.guestBanner p { margin: 0; color: var(--muted); font-size: .62rem; line-height: 1.5; }
+.guestBannerActions { display: flex; gap: 7px; }
+.guestBannerActions :global(.button) { min-height: 39px; padding-inline: 13px; font-size: .64rem; }
+.guestBanner + .contentHeader { margin-top: 28px; }
 .statsGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 46px 0 58px; }
 .statsGrid article { display: flex; align-items: center; gap: 14px; padding: 20px; border: 1px solid var(--border); border-radius: 16px; background: white; }
 .statsGrid article > span { display: grid; width: 42px; height: 42px; place-items: center; border-radius: 12px; color: var(--brand); background: var(--brand-soft); }
@@ -73,6 +81,12 @@
 .error button { display: flex; align-items: center; gap: 5px; cursor: pointer; color: inherit; background: transparent; font-size: .65rem; font-weight: 700; }
 .spin { animation: spin .9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 680px) {
+  .guestBanner { grid-template-columns: auto 1fr; }
+  .guestBannerActions { grid-column: 1 / -1; }
+  .guestBannerActions :global(.button) { flex: 1; }
+}
 
 .dialogBackdrop {
   position: fixed;

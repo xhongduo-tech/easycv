@@ -16,6 +16,14 @@
 
 - `GET /api/health`
 
+## 认证与账号
+
+- `ALL /api/auth/*`：Better Auth 认证入口；包含邮箱注册/登录/验证、密码重置、第三方 OAuth、手机号验证码、会话与账号管理。
+- `GET /api/auth/providers`：返回当前环境已启用的邮箱、Google、GitHub、微信和手机号能力，不返回任何密钥。
+- `POST /api/auth/claim-guest`：正式登录后认领当前浏览器访客草稿；访客 Cookie 只从服务端读取，不能在请求正文中指定其他访客。
+
+邮箱密码至少 12 位且同时包含字母和数字。邮箱验证、密码重置链接有效期为 1 小时；中国大陆手机号统一保存为 `+86` E.164 格式，验证码为 6 位、5 分钟有效、最多尝试 3 次。认证敏感端点使用 D1 持久化限流，验证标识散列存储，OAuth token 加密存储。
+
 ## 目录
 
 - `GET /api/templates?track=study|career&targetProfileId=`（目标推荐排序）
@@ -127,5 +135,8 @@ PDF 使用编辑器中的打印入口生成可选中文本的 A4 文档。`githu
 ## 管理
 
 - `GET /api/admin/overview`
+- `GET /api/auth/admin/list-users`：分页查询和搜索用户。
+- `POST /api/auth/admin/set-role`：调整 `user` / `admin` 角色。
+- `POST /api/auth/admin/ban-user`、`POST /api/auth/admin/unban-user`：停用或恢复账号。
 
-当前管理端为演示读取面，生产版 CMS 写操作需要真实身份、RBAC、MFA、发布审批和审计。
+所有管理接口要求已认证且角色为 `admin`；非管理员返回 `401` / `403`。管理员不能在用户管理页读取简历正文，也不能把产品角色提升为云端运维权限。公开运营前仍需补充管理员 MFA 与更细的高风险操作审批。

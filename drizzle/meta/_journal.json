@@ -29,6 +29,13 @@
       "when": 1788157648000,
       "tag": "0003_resume_target_briefs",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1788166800000,
+      "tag": "0004_complete_auth",
+      "breakpoints": true
     }
   ]
 }

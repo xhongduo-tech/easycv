@@ -6,10 +6,88 @@ export const users = sqliteTable(
     id: text("id").primaryKey(),
     name: text("name").notNull(),
     email: text("email").notNull(),
+    emailVerified: integer("email_verified", { mode: "boolean" }).notNull().default(false),
+    image: text("image"),
     role: text("role").notNull().default("user"),
+    banned: integer("banned", { mode: "boolean" }).notNull().default(false),
+    banReason: text("ban_reason"),
+    banExpires: text("ban_expires"),
+    phoneNumber: text("phone_number"),
+    phoneNumberVerified: integer("phone_number_verified", { mode: "boolean" }).notNull().default(false),
     createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
   },
-  (table) => [uniqueIndex("idx_users_email").on(table.email)],
+  (table) => [
+    uniqueIndex("idx_users_email").on(table.email),
+    uniqueIndex("idx_users_phone_number").on(table.phoneNumber),
+  ],
+);
+
+export const authSessions = sqliteTable(
+  "auth_sessions",
+  {
+    id: text("id").primaryKey(),
+    expiresAt: text("expires_at").notNull(),
+    token: text("token").notNull(),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    impersonatedBy: text("impersonated_by"),
+  },
+  (table) => [
+    uniqueIndex("idx_auth_sessions_token").on(table.token),
+    index("idx_auth_sessions_user_id").on(table.userId),
+  ],
+);
+
+export const authAccounts = sqliteTable(
+  "auth_accounts",
+  {
+    id: text("id").primaryKey(),
+    issuer: text("issuer").notNull(),
+    accountId: text("account_id").notNull(),
+    providerId: text("provider_id").notNull(),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    accessToken: text("access_token"),
+    refreshToken: text("refresh_token"),
+    idToken: text("id_token"),
+    accessTokenExpiresAt: text("access_token_expires_at"),
+    refreshTokenExpiresAt: text("refresh_token_expires_at"),
+    scope: text("scope"),
+    password: text("password"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("idx_auth_accounts_issuer_account").on(table.issuer, table.accountId),
+    index("idx_auth_accounts_user_id").on(table.userId),
+  ],
+);
+
+export const authVerifications = sqliteTable(
+  "auth_verifications",
+  {
+    id: text("id").primaryKey(),
+    identifier: text("identifier").notNull(),
+    value: text("value").notNull(),
+    expiresAt: text("expires_at").notNull(),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [index("idx_auth_verifications_identifier").on(table.identifier)],
+);
+
+export const authRateLimits = sqliteTable(
+  "auth_rate_limits",
+  {
+    id: text("id").primaryKey(),
+    key: text("key").notNull(),
+    count: integer("count").notNull(),
+    lastRequest: integer("last_request").notNull(),
+  },
+  (table) => [uniqueIndex("idx_auth_rate_limits_key").on(table.key)],
 );
 
 export const guestSessions = sqliteTable(

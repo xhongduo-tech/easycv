@@ -303,6 +303,59 @@ svg {
   gap: 6px;
 }
 
+.account-menu {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+
+.account-trigger {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 8px;
+  list-style: none;
+  cursor: pointer;
+  border-radius: 12px;
+}
+
+.account-trigger::-webkit-details-marker { display: none; }
+.account-trigger:hover { background: var(--surface-alt); }
+
+.account-avatar {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  overflow: hidden;
+  place-items: center;
+  border-radius: 11px;
+  color: white;
+  background: var(--brand);
+  font-size: .72rem;
+  font-weight: 800;
+}
+
+.account-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.account-label { display: flex; max-width: 150px; flex-direction: column; gap: 2px; text-align: left; }
+.account-label strong { overflow: hidden; font-size: .68rem; text-overflow: ellipsis; white-space: nowrap; }
+.account-label small { overflow: hidden; color: var(--muted); font-size: .52rem; text-overflow: ellipsis; white-space: nowrap; }
+.account-popover { position: absolute; z-index: 90; top: calc(100% + 8px); right: 0; display: grid; width: 230px; padding: 7px; border: 1px solid var(--border); border-radius: 14px; background: white; box-shadow: var(--shadow-md); }
+.account-summary { display: flex; min-width: 0; align-items: center; gap: 10px; padding: 9px 8px 12px; }
+.account-summary > div { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
+.account-summary strong, .account-summary small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-summary strong { font-size: .72rem; }
+.account-summary small { color: var(--muted); font-size: .56rem; }
+.account-menu-item { display: flex; min-height: 40px; align-items: center; gap: 9px; padding: 0 10px; cursor: pointer; border-radius: 8px; color: var(--ink-soft); background: transparent; font-size: .68rem; font-weight: 650; text-align: left; }
+.account-menu-item:hover { color: var(--brand); background: var(--surface-alt); }
+.account-menu-item[data-danger="true"] { color: var(--danger); }
+.account-menu-divider { height: 1px; margin: 6px 4px; background: var(--border); }
+.account-login-compact { display: grid; width: 40px; height: 40px; place-items: center; border-radius: 10px; color: var(--brand); background: var(--brand-soft); }
+.account-menu-loading { width: 42px; height: 42px; padding: 4px; }
+.account-menu-loading .account-avatar { background: var(--border); animation: accountPulse 1.2s ease-in-out infinite alternate; }
+@keyframes accountPulse { to { opacity: .45; } }
+
 .mobile-menu {
   position: relative;
   display: none;

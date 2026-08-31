@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 import { targetProfiles, templates } from "@/lib/sample-data";
+import { auth } from "@/lib/auth";
 
 const SESSION_COOKIE = "jianji_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
@@ -9,6 +10,10 @@ let initialization: Promise<void> | undefined;
 export interface GuestSession {
   userId: string;
   setCookie?: string;
+  kind?: "guest" | "user";
+  role?: string;
+  name?: string;
+  email?: string;
 }
 
 export class SessionRateLimitError extends Error {
@@ -49,8 +54,8 @@ export async function getOrCreateSession(request: Request): Promise<GuestSession
     const expiresAt = new Date(now.getTime() + SESSION_TTL_SECONDS * 1000).toISOString();
     await db.batch([
       db
-        .prepare("INSERT INTO users (id, name, email, role, created_at) VALUES (?, ?, ?, 'user', ?)")
-        .bind(userId, "访客用户", `${userId}@guest.jianji.local`, now.toISOString()),
+        .prepare("INSERT INTO users (id, name, email, email_verified, role, banned, phone_number_verified, created_at, updated_at) VALUES (?, ?, ?, 0, 'user', 0, 0, ?, ?)")
+        .bind(userId, "访客用户", `${userId}@guest.jianji.local`, now.toISOString(), now.toISOString()),
       db
         .prepare("INSERT INTO guest_sessions (token_hash, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)")
         .bind(await hashToken(nextToken), userId, expiresAt, now.toISOString()),
@@ -59,6 +64,7 @@ export async function getOrCreateSession(request: Request): Promise<GuestSession
     const secure = new URL(request.url).protocol === "https:" ? "; Secure" : "";
     return {
       userId,
+      kind: "guest",
       setCookie: `${SESSION_COOKIE}=${nextToken}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL_SECONDS}${secure}`,
     };
   } catch (error) {
@@ -69,6 +75,22 @@ export async function getOrCreateSession(request: Request): Promise<GuestSession
 
 export async function getExistingSession(request: Request): Promise<GuestSession | null> {
   await ensureDatabase();
+  const authenticated = await auth.api.getSession({ headers: request.headers });
+  if (authenticated?.user) {
+    const user = authenticated.user as typeof authenticated.user & { role?: string };
+    return {
+      userId: user.id,
+      kind: "user",
+      role: user.role ?? "user",
+      name: user.name,
+      email: user.email,
+    };
+  }
+  return getGuestSession(request);
+}
+
+export async function getGuestSession(request: Request): Promise<GuestSession | null> {
+  await ensureDatabase();
   const db = getDatabase();
   const token = readCookie(request.headers.get("cookie"), SESSION_COOKIE);
   if (token && /^[a-f0-9]{64}$/.test(token)) {
@@ -77,7 +99,7 @@ export async function getExistingSession(request: Request): Promise<GuestSession
       .prepare("SELECT user_id FROM guest_sessions WHERE token_hash = ? AND expires_at > ?")
       .bind(tokenHash, new Date().toISOString())
       .first<{ user_id: string }>();
-    if (existing) return { userId: existing.user_id };
+    if (existing) return { userId: existing.user_id, kind: "guest" };
   }
   return null;
 }
@@ -95,8 +117,16 @@ async function initializeDatabase() {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       email TEXT NOT NULL UNIQUE,
+      email_verified INTEGER NOT NULL DEFAULT 0,
+      image TEXT,
       role TEXT NOT NULL DEFAULT 'user',
-      created_at TEXT NOT NULL
+      banned INTEGER NOT NULL DEFAULT 0,
+      ban_reason TEXT,
+      ban_expires TEXT,
+      phone_number TEXT,
+      phone_number_verified INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
     )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS guest_sessions (
       token_hash TEXT PRIMARY KEY,
@@ -259,6 +289,8 @@ async function initializeDatabase() {
     ),
   ]);
 
+  await ensureAuthSchema(db);
+
   const now = new Date().toISOString();
   const catalogState = await db
     .prepare("SELECT version FROM catalog_meta WHERE key = 'core'")
@@ -345,6 +377,75 @@ async function initializeDatabase() {
       .bind(CATALOG_VERSION, now)
       .run();
   }
+}
+
+async function ensureAuthSchema(db: ReturnType<typeof getDatabase>) {
+  const columns = await db.prepare("PRAGMA table_info(users)").all<{ name: string }>();
+  const existing = new Set(columns.results.map((column) => column.name));
+  const additions = [
+    ["email_verified", "INTEGER NOT NULL DEFAULT 0"],
+    ["image", "TEXT"],
+    ["updated_at", "TEXT"],
+    ["banned", "INTEGER NOT NULL DEFAULT 0"],
+    ["ban_reason", "TEXT"],
+    ["ban_expires", "TEXT"],
+    ["phone_number", "TEXT"],
+    ["phone_number_verified", "INTEGER NOT NULL DEFAULT 0"],
+  ] as const;
+  for (const [name, definition] of additions) {
+    if (!existing.has(name)) await db.prepare(`ALTER TABLE users ADD COLUMN ${name} ${definition}`).run();
+  }
+  await db.prepare("UPDATE users SET updated_at = created_at WHERE updated_at IS NULL OR updated_at = ''").run();
+
+  await db.batch([
+    db.prepare(`CREATE TABLE IF NOT EXISTS auth_sessions (
+      id TEXT PRIMARY KEY,
+      expires_at TEXT NOT NULL,
+      token TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      ip_address TEXT,
+      user_agent TEXT,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      impersonated_by TEXT
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS auth_accounts (
+      id TEXT PRIMARY KEY,
+      issuer TEXT NOT NULL,
+      account_id TEXT NOT NULL,
+      provider_id TEXT NOT NULL,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      access_token TEXT,
+      refresh_token TEXT,
+      id_token TEXT,
+      access_token_expires_at TEXT,
+      refresh_token_expires_at TEXT,
+      scope TEXT,
+      password TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(issuer, account_id)
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS auth_verifications (
+      id TEXT PRIMARY KEY,
+      identifier TEXT NOT NULL,
+      value TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS auth_rate_limits (
+      id TEXT PRIMARY KEY,
+      key TEXT NOT NULL UNIQUE,
+      count INTEGER NOT NULL,
+      last_request INTEGER NOT NULL
+    )`),
+    db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone_number ON users(phone_number)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_auth_sessions_user_id ON auth_sessions(user_id)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_auth_accounts_user_id ON auth_accounts(user_id)"),
+    db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_auth_accounts_issuer_account ON auth_accounts(issuer, account_id)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_auth_verifications_identifier ON auth_verifications(identifier)"),
+  ]);
 }
 
 export async function recordAudit(

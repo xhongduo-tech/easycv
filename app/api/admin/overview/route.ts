@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { ensureDatabase, getOrCreateSession, getDatabase, withSessionCookie } from "@/../db";
-import { withApiError } from "@/lib/api";
+import { ensureDatabase, getDatabase } from "@/../db";
+import { auth } from "@/lib/auth";
+import { apiError, withApiError } from "@/lib/api";
 
 interface RecentRow {
   id: string;
@@ -15,31 +16,30 @@ interface RecentRow {
 export async function GET(request: Request) {
   try {
     await ensureDatabase();
-    const session = await getOrCreateSession(request);
+    const session = await auth.api.getSession({ headers: request.headers });
+    const role = (session?.user as (NonNullable<typeof session>["user"] & { role?: string }) | undefined)?.role;
+    if (!session?.user) return apiError(401, "UNAUTHORIZED", "请先登录管理员账号");
+    if (role !== "admin") return apiError(403, "FORBIDDEN", "当前账号没有管理权限");
     const db = getDatabase();
     const [ownedMetric, templateMetric, targetMetric, recent, tracks, statuses] = await Promise.all([
       db
         .prepare(
-          "SELECT COUNT(*) AS total, COALESCE(ROUND(AVG(progress)), 0) AS average FROM resumes WHERE user_id = ? AND deleted_at IS NULL",
+          "SELECT COUNT(*) AS total, COALESCE(ROUND(AVG(progress)), 0) AS average FROM resumes WHERE deleted_at IS NULL",
         )
-        .bind(session.userId)
         .first<{ total: number; average: number }>(),
       db.prepare("SELECT COUNT(*) AS total FROM templates WHERE active = 1").first<{ total: number }>(),
       db.prepare("SELECT COUNT(*) AS total FROM target_profiles WHERE active = 1").first<{ total: number }>(),
       db
-        .prepare("SELECT id, title, track, target_name, progress, revision, updated_at FROM resumes WHERE user_id = ? AND deleted_at IS NULL ORDER BY updated_at DESC LIMIT 6")
-        .bind(session.userId)
+        .prepare("SELECT id, title, track, target_name, progress, revision, updated_at FROM resumes WHERE deleted_at IS NULL ORDER BY updated_at DESC LIMIT 6")
         .all<RecentRow>(),
       db
-        .prepare("SELECT track AS label, COUNT(*) AS value FROM resumes WHERE user_id = ? AND deleted_at IS NULL GROUP BY track")
-        .bind(session.userId)
+        .prepare("SELECT track AS label, COUNT(*) AS value FROM resumes WHERE deleted_at IS NULL GROUP BY track")
         .all<{ label: string; value: number }>(),
       db
-        .prepare("SELECT status AS label, COUNT(*) AS value FROM resumes WHERE user_id = ? AND deleted_at IS NULL GROUP BY status")
-        .bind(session.userId)
+        .prepare("SELECT status AS label, COUNT(*) AS value FROM resumes WHERE deleted_at IS NULL GROUP BY status")
         .all<{ label: string; value: number }>(),
     ]);
-    return withSessionCookie(NextResponse.json({
+    return NextResponse.json({
       metrics: {
         totalResumes: Number(ownedMetric?.total ?? 0),
         activeTemplates: Number(templateMetric?.total ?? 0),
@@ -57,8 +57,8 @@ export async function GET(request: Request) {
       })),
       trackBreakdown: tracks.results,
       statusBreakdown: statuses.results,
-      currentAdmin: { role: "visitor_operator", mode: "private-session-demo" },
-    }), session);
+      currentAdmin: { role, mode: "authenticated-admin" },
+    });
   } catch (error) {
     return withApiError(error);
   }

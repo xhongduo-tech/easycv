@@ -31,6 +31,8 @@
   justify-content: flex-end;
 }
 
+.builderAccount { display: flex; align-items: center; }
+
 .iconButton {
   display: none;
   width: 42px;

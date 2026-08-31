@@ -8,6 +8,9 @@
 flowchart LR
   Browser[Web / Mobile Browser] --> App[Vinext App Router]
   App --> Routes[Route Handlers]
+  App --> Auth[Better Auth]
+  Auth --> Identity[Email / OAuth / WeChat / Mainland SMS]
+  Auth --> D1
   Routes --> Domain[Validation + Domain Services]
   Domain --> D1[(Cloudflare D1)]
   Domain --> Advisor[Local Advisor]
@@ -21,7 +24,7 @@ flowchart LR
 
 ## 2. 模块边界
 
-- Identity：随机 HttpOnly 访客会话映射到独立用户，预留实名账号与角色模型。
+- Identity：Better Auth 提供邮箱、Google、GitHub、微信网站应用与中国大陆手机号认证，配套邮箱验证、密码重置、会话、账号绑定、停用与角色；随机 HttpOnly 访客会话仍可试用，登录后由服务端一次性认领其草稿。
 - Target Catalog：101 所院校与 85 家企业的编辑适配方案，包含类别、地区、关键词、优先级、来源类型与复核时间。
 - Template：16 套版式映射到 8 个专业阅读情境；模板拥有密度、排版理由和设计原则，按目标企业与具体岗位推荐而不伪装成官方模板。
 - Resume：简历项目、当前修订、内容 JSON 和软删除。
@@ -39,6 +42,9 @@ flowchart LR
 ```mermaid
 erDiagram
   USERS ||--o{ RESUMES : owns
+  USERS ||--o{ AUTH_SESSIONS : signs_in
+  USERS ||--o{ AUTH_ACCOUNTS : links
+  USERS ||--o{ GUEST_SESSIONS : tries
   TARGET_PROFILES ||--o{ RESUMES : targets
   TEMPLATES ||--o{ RESUMES : renders
   RESUMES ||--o{ RESUME_VERSIONS : snapshots
@@ -51,6 +57,19 @@ erDiagram
     text id PK
     text email UK
     text role
+    text phone_number UK
+  }
+  AUTH_SESSIONS {
+    text id PK
+    text token UK
+    text user_id FK
+    text expires_at
+  }
+  AUTH_ACCOUNTS {
+    text id PK
+    text provider_id
+    text account_id
+    text user_id FK
   }
   TARGET_PROFILES {
     text id PK
@@ -131,19 +150,13 @@ Advisor 在平台 API 内提供两层能力：默认确定性规则分析，以�
 
 ## 6. 权限
 
-当前访客会话只能访问自己的简历；演示治理页也只读取当前会话摘要，不返回正文。计划角色：
+访客与正式用户只能访问自己的简历；认证会话优先于访客 Cookie。`user` 仅管理本人资料、账号与会话，`admin` 可读取平台聚合指标、查询用户、调整角色及停用/恢复账号，但不能通过管理界面读取简历正文。管理员邮箱由服务端 `AUTH_ADMIN_EMAILS` 引导创建角色，所有管理接口仍在服务端再次校验会话与角色。
 
-- `USER`：仅管理自己的简历。
-- `CONTENT_EDITOR`：编辑目标资料草稿。
-- `PUBLISHER`：发布画像和模板。
-- `ADMIN`：运营管理。
-- `SUPER_ADMIN`：角色和高风险配置。
-
-产品 `SUPER_ADMIN` 不等于服务器或云账号超级权限。运维使用独立 IAM、MFA、临时授权和完整审计。
+产品 `admin` 不等于服务器或云账号超级权限。运维使用独立 IAM；公开运营前还需为管理员加入 MFA、临时授权和更完整的管理操作审计。
 
 ## 7. 生产演进
 
-- Auth：平台会话 / OAuth，HttpOnly、Secure、SameSite Cookie。
+- Auth：补充管理员 MFA、账号数据导出、异常登录提醒和外部提供方密钥轮换流程。
 - Files：R2 保存上传源文件与导出产物，D1 保存所有权和生命周期。
 - Export Worker：固定 Chromium + 授权 CJK 字体，导出后再做文本抽取检查。
 - Observability：结构化日志、请求 ID、OpenTelemetry 与错误监控。

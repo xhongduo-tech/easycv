@@ -18,6 +18,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  ShieldCheck,
   Target,
   Trash2,
 } from "lucide-react";
@@ -25,12 +26,14 @@ import { ResumePreview } from "@/components/resume-preview";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { formatDate } from "@/lib/utils";
+import { authClient } from "@/lib/auth-client";
 import type { ResumeRecord, ResumeTemplate, Track } from "@/types/resume";
 import { NewResumeDialog } from "./new-resume-dialog";
 import styles from "./dashboard.module.css";
 
 export function DashboardClient({ initialCreate = false, initialTrack }: { initialCreate?: boolean; initialTrack?: Track }) {
   const router = useRouter();
+  const viewer = authClient.useSession();
   const [resumes, setResumes] = useState<ResumeRecord[]>([]);
   const [templates, setTemplates] = useState<ResumeTemplate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,6 +73,12 @@ export function DashboardClient({ initialCreate = false, initialTrack }: { initi
     // Data fetching is intentionally started after hydration.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
+  }, [load]);
+
+  useEffect(() => {
+    const refreshAfterClaim = () => void load();
+    window.addEventListener("jianji:guest-claimed", refreshAfterClaim);
+    return () => window.removeEventListener("jianji:guest-claimed", refreshAfterClaim);
   }, [load]);
 
   const filtered = useMemo(() => {
@@ -163,6 +172,14 @@ export function DashboardClient({ initialCreate = false, initialTrack }: { initi
               <button className="button button-primary" type="button" onClick={() => setCreateOpen(true)}><Plus size={17} /> 新建简历</button>
             </div>
           </div>
+
+          {!viewer.isPending && !viewer.data?.user && (
+            <aside className={styles.guestBanner}>
+              <span><ShieldCheck size={21} /></span>
+              <div><strong>当前是访客空间</strong><p>登录后可跨设备保存；当前浏览器里的简历会自动并入你的账号。</p></div>
+              <div className={styles.guestBannerActions}><Link className="button button-primary" href="/auth/login?returnTo=%2Fdashboard">登录</Link><Link className="button button-secondary" href="/auth/register?returnTo=%2Fdashboard">创建账号</Link></div>
+            </aside>
+          )}
 
           <div className={styles.contentHeader}>
             <div><h2>我的简历</h2><span>{filtered.length} 份</span></div>

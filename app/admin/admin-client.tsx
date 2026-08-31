@@ -64,11 +64,11 @@ export function AdminClient() {
         <div className="shell">
           <div className={styles.adminHeader}>
             <div>
-              <div className={styles.modeBadge}><ShieldCheck size={14} /> 私有会话 · 只读演示</div>
+              <div className={styles.modeBadge}><ShieldCheck size={14} /> 管理员已验证</div>
               <h1>内容治理与运行概览</h1>
-              <p>这里只展示当前访客空间的简历摘要；不会读取其他用户正文，也不提供宿主电脑控制。</p>
+              <p>查看平台级汇总数据；用户身份、角色与停用状态在独立的用户管理页维护。</p>
             </div>
-            <button className="button button-secondary" type="button" onClick={() => void load()} disabled={loading}><RefreshCw className={loading ? styles.spin : ""} size={16} /> 刷新数据</button>
+            <div className={styles.headerButtons}><Link className="button button-primary" href="/admin/users">用户管理 <ArrowRight size={15} /></Link><button className="button button-secondary" type="button" onClick={() => void load()} disabled={loading}><RefreshCw className={loading ? styles.spin : ""} size={16} /> 刷新数据</button></div>
           </div>
 
           {error && <div className={styles.error} role="alert">{error}</div>}
@@ -85,7 +85,7 @@ export function AdminClient() {
 
               <div className={styles.dashboardGrid}>
                 <section className={styles.recentPanel}>
-                  <div className={styles.panelHeader}><div><span>当前访客空间</span><h2>最近更新的简历</h2></div><Link href="/dashboard">查看我的简历 <ArrowRight size={14} /></Link></div>
+                  <div className={styles.panelHeader}><div><span>全平台元数据</span><h2>最近更新的简历</h2></div><span>不读取正文</span></div>
                   {overview.recentResumes.length ? (
                     <div className={styles.tableWrap}>
                       <table>
@@ -136,7 +136,7 @@ function Metric({ icon: Icon, label, value, note }: { icon: typeof FileText; lab
 }
 
 function ResumeRow({ resume }: { resume: AdminResumeSummary }) {
-  return <tr><td><Link href={`/builder/${resume.id}`}><span className={styles.fileIcon}><FileText size={15} /></span><div><strong>{resume.title}</strong><small>修订 {resume.revision}</small></div></Link></td><td><span className={styles.trackPill}>{resume.track === "study" ? "留学" : "求职"}</span></td><td>{resume.targetName}</td><td><div className={styles.tableProgress}><i><span style={{ width: `${resume.progress}%` }} /></i><strong>{resume.progress}%</strong></div></td><td><span className={styles.time}><Clock3 size={12} />{formatDate(resume.updatedAt)}</span></td></tr>;
+  return <tr><td><span className={styles.resumeIdentity}><span className={styles.fileIcon}><FileText size={15} /></span><span><strong>{resume.title}</strong><small>修订 {resume.revision}</small></span></span></td><td><span className={styles.trackPill}>{resume.track === "study" ? "留学" : "求职"}</span></td><td>{resume.targetName}</td><td><div className={styles.tableProgress}><i><span style={{ width: `${resume.progress}%` }} /></i><strong>{resume.progress}%</strong></div></td><td><span className={styles.time}><Clock3 size={12} />{formatDate(resume.updatedAt)}</span></td></tr>;
 }
 
 function GovernanceCard({ icon: Icon, label, title, text, tags }: { icon: typeof FileText; label: string; title: string; text: string; tags: string[] }) {
