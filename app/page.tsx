@@ -24,6 +24,9 @@ export default function HomePage() {
               <Link className="button button-ghost" href="/dashboard">
                 我的简历 <ArrowRight size={17} />
               </Link>
+              <Link className="button button-ghost" href="/pricing">
+                查看定价 <ArrowRight size={17} />
+              </Link>
             </div>
             <div className={styles.promiseLine}>
               <span><Check size={14} /> 不编造经历</span>

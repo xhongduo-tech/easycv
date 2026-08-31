@@ -141,13 +141,18 @@ export const updateResumeSchema = z
     expectedRevision: z.number().int().positive(),
   })
   .strict()
-  .refine((value) => Object.keys(value).length > 0, "至少需要提供一个可更新字段");
+  .refine(
+    (value) => Object.keys(value).some((key) => key !== "expectedRevision"),
+    "至少需要提供一个可更新字段",
+  );
 
 export const resumeListQuerySchema = z
   .object({
     track: trackSchema.optional(),
     status: resumeStatusSchema.optional(),
-    limit: z.coerce.number().int().min(1).max(100).default(50),
+    q: optionalText(120).optional(),
+    cursor: z.string().trim().min(1).max(1_000).regex(/^[A-Za-z0-9_-]+$/).optional(),
+    limit: z.coerce.number().int().min(1).max(50).default(20),
   })
   .strict();
 
@@ -205,6 +210,7 @@ export const rewriteSourceRefSchema = z.discriminatedUnion("section", [
 
 export const recommendationRequestSchema = z
   .object({
+    requestId: z.string().uuid("请求 ID 格式不正确"),
     resumeId: z.string().uuid("简历 ID 格式不正确"),
     content: resumeContentSchema.optional(),
     track: trackSchema.optional(),

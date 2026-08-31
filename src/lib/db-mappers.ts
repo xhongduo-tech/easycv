@@ -1,4 +1,4 @@
-import type { ResumeContent, ResumeRecord, ResumeTemplate, TargetBrief, TargetProfile } from "@/types/resume";
+import type { ResumeContent, ResumeRecord, ResumeSummary, ResumeTemplate, TargetBrief, TargetProfile } from "@/types/resume";
 import { withTemplateDesignMeta } from "@/lib/template-system";
 
 export interface ResumeRow {
@@ -16,6 +16,8 @@ export interface ResumeRow {
   created_at: string;
   updated_at: string;
 }
+
+export type ResumeSummaryRow = Omit<ResumeRow, "user_id" | "content_json">;
 
 export interface TemplateRow {
   id: string;
@@ -70,6 +72,22 @@ export function mapResume(row: ResumeRow): ResumeRecord {
     progress: row.progress,
     revision: row.revision,
     content: JSON.parse(row.content_json) as ResumeContent,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function mapResumeSummary(row: ResumeSummaryRow): ResumeSummary {
+  return {
+    id: row.id,
+    title: row.title,
+    track: row.track,
+    ...(row.target_profile_id ? { targetProfileId: row.target_profile_id } : {}),
+    targetName: row.target_name,
+    templateId: row.template_id,
+    status: row.status,
+    progress: row.progress,
+    revision: row.revision,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

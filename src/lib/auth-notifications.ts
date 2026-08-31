@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { resolveAuthRuntime } from "@/lib/auth-runtime";
 
 const encoder = new TextEncoder();
 
@@ -11,33 +12,22 @@ export interface AuthCapabilities {
   developmentCapture: boolean;
 }
 
-function runtimeBaseUrl() {
-  return env.BETTER_AUTH_URL ?? env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-}
-
-function isLocalAuth() {
-  try {
-    return ["localhost", "127.0.0.1"].includes(new URL(runtimeBaseUrl()).hostname);
-  } catch {
-    return false;
-  }
-}
-
 export function getAuthCapabilities(): AuthCapabilities {
-  const local = isLocalAuth();
+  const runtime = resolveAuthRuntime(env);
+  const capture = runtime.developmentCapture;
   return {
-    email: local || Boolean(env.RESEND_API_KEY && env.AUTH_EMAIL_FROM),
+    email: capture || Boolean(env.RESEND_API_KEY && env.AUTH_EMAIL_FROM),
     google: Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET),
     github: Boolean(env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET),
     wechat: Boolean(env.WECHAT_CLIENT_ID && env.WECHAT_CLIENT_SECRET),
-    phone: local || Boolean(
+    phone: capture || Boolean(
       env.TENCENTCLOUD_SECRET_ID
       && env.TENCENTCLOUD_SECRET_KEY
       && env.TENCENT_SMS_SDK_APP_ID
       && env.TENCENT_SMS_SIGN_NAME
       && env.TENCENT_SMS_TEMPLATE_ID,
     ),
-    developmentCapture: local,
+    developmentCapture: capture,
   };
 }
 
@@ -49,7 +39,7 @@ export async function sendAuthEmail(input: {
   actionLabel: string;
   actionUrl: string;
 }) {
-  if (isLocalAuth() && !env.RESEND_API_KEY) {
+  if (resolveAuthRuntime(env).developmentCapture && !env.RESEND_API_KEY) {
     console.info(`[简迹本地邮件] ${input.subject}: ${input.actionUrl}`);
     return;
   }
@@ -73,8 +63,8 @@ export async function sendAuthEmail(input: {
 }
 
 export async function sendPhoneOtp(phoneNumber: string, code: string) {
-  if (isLocalAuth() && !env.TENCENTCLOUD_SECRET_ID) {
-    console.info(`[简迹本地短信] ${phoneNumber}: ${code}`);
+  if (resolveAuthRuntime(env).developmentCapture && !env.TENCENTCLOUD_SECRET_ID) {
+    console.info(`[简迹本地短信] ${phoneNumber.slice(-4)}: ${code}`);
     return;
   }
   const secretId = env.TENCENTCLOUD_SECRET_ID;

@@ -17,6 +17,28 @@
 .panelTitle > span { display: grid; width: 42px; height: 42px; place-items: center; border-radius: 12px; color: var(--brand); background: var(--brand-soft); }
 .panelTitle h2 { margin: 2px 0 5px; font-size: 1rem; }
 .panelTitle p { margin: 0; color: var(--muted); font-size: .65rem; line-height: 1.55; }
+.creditPanel { border-color: #d7d0fb; background: linear-gradient(135deg, white 55%, #f5f2ff); }
+.creditLayout { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 14px; }
+.balanceCard { display: flex; min-height: 190px; flex-direction: column; padding: 20px; border-radius: 15px; color: white; background: var(--brand); }
+.balanceCard > span { color: rgba(255, 255, 255, .72); font-size: .62rem; font-weight: 720; }
+.balanceCard > strong { margin-top: 12px; font-size: 3.1rem; line-height: 1; letter-spacing: -.07em; }
+.balanceCard > strong small { margin-left: 5px; font-size: .8rem; letter-spacing: 0; }
+.balanceCard p { margin: 11px 0 0; color: rgba(255, 255, 255, .7); font-size: .6rem; line-height: 1.5; }
+.balanceCard > small { margin-top: 7px; color: rgba(255, 255, 255, .72); font-size: .62rem; line-height: 1.45; }
+.balanceCard a { display: flex; align-items: center; gap: 5px; margin-top: auto; color: white; font-size: .62rem; font-weight: 720; }
+.accountPacks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.accountPacks article { display: flex; min-width: 0; flex-direction: column; padding: 14px; border: 1px solid var(--border); border-radius: 13px; background: white; }
+.accountPacks article[data-featured="true"] { border-color: var(--brand); }
+.accountPacks article > div { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.accountPacks article > div strong { font-size: .68rem; }
+.accountPacks article > div span { padding: 3px 5px; border-radius: 99px; background: var(--lime); font-size: .48rem; font-weight: 780; }
+.accountPacks p { display: flex; flex-direction: column; gap: 6px; margin: 18px 0; }
+.accountPacks p b { font-size: 1.3rem; letter-spacing: -.04em; }
+.accountPacks p span { color: var(--muted); font-size: .68rem; line-height: 1.4; }
+.accountPacks button { min-height: 44px; margin-top: auto; border-radius: 8px; color: var(--muted); background: var(--surface-alt); font-size: .68rem; font-weight: 700; }
+.creditCaveat { display: flex; align-items: center; gap: 6px; margin: 13px 0 0; color: var(--success); font-size: .57rem; line-height: 1.45; }
+.creditLoading { display: flex; min-height: 120px; align-items: center; justify-content: center; gap: 8px; color: var(--muted); font-size: .68rem; }
+.creditLoading button { min-height: 40px; padding: 0 12px; cursor: pointer; border-radius: 8px; color: var(--brand); background: var(--brand-soft); font-weight: 700; }
 .panel form, .phoneForm, .dangerForm { display: grid; gap: 13px; }
 .field { display: grid; gap: 7px; }
 .field > span { font-size: .67rem; font-weight: 710; }
@@ -60,9 +82,18 @@
 .state > svg { color: var(--brand); }
 .state h1 { margin: 0; font-size: 2rem; }
 .state p { margin: 0 0 8px; color: var(--muted); }
+.twoFactorForm { display: grid; gap: 12px; margin-top: 14px; }
+.securityEnabled { margin: 14px 0 0; color: var(--success); font-size: .72rem; font-weight: 750; }
+.setupHint { margin: 12px 0 0; color: var(--muted); font-size: .68rem; line-height: 1.65; }
+.setupCode { display: block; max-height: 92px; overflow: auto; padding: 10px; border-radius: 9px; color: var(--ink-soft); background: var(--surface-alt); font-size: .61rem; line-break: anywhere; }
+.backupCodes { padding: 13px; margin-top: 14px; border: 1px solid var(--border); border-radius: 11px; background: var(--surface-alt); }
+.backupCodes > strong { font-size: .72rem; }
+.backupCodes > p { margin: 5px 0 10px; color: var(--muted); font-size: .62rem; }
+.backupCodes > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.backupCodes code { padding: 6px; border-radius: 6px; background: white; font-size: .61rem; text-align: center; }
 .spin { animation: spin .85s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-@media (max-width: 820px) { .settingsGrid { grid-template-columns: 1fr; } .widePanel { grid-column: auto; } .dangerForm { grid-template-columns: 1fr; } }
-@media (max-width: 620px) { .accountShell { padding-top: 42px; } .heading { align-items: flex-start; flex-direction: column; } .heading > span { display: none; } .panel { padding: 20px; } .field input { font-size: 16px; } .sessionList > div { grid-template-columns: auto 1fr; } .sessionList > div > :last-child { grid-column: 2; justify-self: start; } }
+@media (max-width: 820px) { .settingsGrid { grid-template-columns: 1fr; } .widePanel { grid-column: auto; } .dangerForm { grid-template-columns: 1fr; } .creditLayout { grid-template-columns: 1fr; } .balanceCard { min-height: 165px; } }
+@media (max-width: 620px) { .accountShell { padding-top: 42px; } .heading { align-items: flex-start; flex-direction: column; } .heading > span { display: none; } .panel { padding: 20px; } .field input { font-size: 16px; } .sessionList > div { grid-template-columns: auto 1fr; } .sessionList > div > :last-child { grid-column: 2; justify-self: start; } .accountPacks { grid-template-columns: 1fr; } .creditCaveat { align-items: flex-start; } }
 @media (prefers-reduced-motion: reduce) { .spin { animation: none; } }

@@ -4,7 +4,10 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  ArrowRight,
   CheckCircle2,
+  Coins,
+  Download,
   Github,
   KeyRound,
   Laptop,
@@ -25,19 +28,34 @@ import { SiteHeader } from "@/components/site-header";
 import { authClient } from "@/lib/auth-client";
 import type { AuthCapabilities } from "@/lib/auth-notifications";
 import { authErrorMessage, normalizeMainlandPhone, passwordIssue } from "@/lib/auth-utils";
+import type { PublicCreditPack } from "@/lib/pricing";
+import { AccountTwoFactor } from "./account-two-factor";
 import styles from "./account.module.css";
 
 type AccountRecord = { id: string; providerId: string; accountId: string; createdAt: Date };
 type SessionRecord = { id: string; token: string; userAgent?: string | null; ipAddress?: string | null; createdAt: Date; expiresAt: Date };
 type Message = { tone: "success" | "error" | "info"; text: string } | null;
+type BillingState = {
+  accountKind: "user" | "guest";
+  balance: { total: number; bonus: number; purchased: number; nextExpiryAt: string | null };
+  packs: PublicCreditPack[];
+  checkoutAvailable: boolean;
+};
 
 export function AccountClient() {
   const router = useRouter();
   const viewer = authClient.useSession();
-  const user = viewer.data?.user as (NonNullable<typeof viewer.data>["user"] & { phoneNumber?: string | null; phoneNumberVerified?: boolean }) | undefined;
+  const user = viewer.data?.user as (NonNullable<typeof viewer.data>["user"] & {
+    phoneNumber?: string | null;
+    phoneNumberVerified?: boolean;
+    twoFactorEnabled?: boolean;
+    role?: string | null;
+  }) | undefined;
   const [accounts, setAccounts] = useState<AccountRecord[]>([]);
   const [sessions, setSessions] = useState<SessionRecord[]>([]);
   const [capabilities, setCapabilities] = useState<AuthCapabilities | null>(null);
+  const [billing, setBilling] = useState<BillingState | null>(null);
+  const [billingStatus, setBillingStatus] = useState<"loading" | "ready" | "error">("loading");
   const [name, setName] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -53,14 +71,27 @@ export function AccountClient() {
   const [busy, setBusy] = useState("");
 
   const loadSecurity = useCallback(async () => {
-    const [accountResult, sessionResult, capabilityResponse] = await Promise.all([
+    setBillingStatus("loading");
+    const securityTask = Promise.all([
       authClient.listAccounts(),
       authClient.listSessions(),
       fetch("/api/auth/providers").then(async (response) => await response.json() as AuthCapabilities),
-    ]);
-    if (accountResult.data) setAccounts(accountResult.data as AccountRecord[]);
-    if (sessionResult.data) setSessions(sessionResult.data as SessionRecord[]);
-    setCapabilities(capabilityResponse);
+    ]).then(([accountResult, sessionResult, capabilityResponse]) => {
+      if (accountResult.data) setAccounts(accountResult.data as AccountRecord[]);
+      if (sessionResult.data) setSessions(sessionResult.data as SessionRecord[]);
+      setCapabilities(capabilityResponse);
+    });
+    const billingTask = fetch("/api/billing")
+      .then(async (response) => {
+        if (!response.ok) throw new Error("额度读取失败");
+        setBilling(await response.json() as BillingState);
+        setBillingStatus("ready");
+      })
+      .catch(() => {
+        setBilling(null);
+        setBillingStatus("error");
+      });
+    await Promise.allSettled([securityTask, billingTask]);
   }, []);
 
   useEffect(() => {
@@ -166,6 +197,31 @@ export function AccountClient() {
     router.push("/"); router.refresh();
   }
 
+  async function downloadAccountData() {
+    setBusy("export"); setMessage(null);
+    try {
+      const response = await fetch("/api/account/export", { method: "POST" });
+      if (!response.ok) {
+        const result = await response.json().catch(() => null) as { error?: { message?: string } } | null;
+        throw new Error(result?.error?.message ?? "账号数据导出失败");
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `jianji-account-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      setMessage({ tone: "success", text: "账号数据包已下载" });
+    } catch (reason) {
+      setMessage({ tone: "error", text: (reason as Error).message });
+    } finally {
+      setBusy("");
+    }
+  }
+
   function showError(error: { code?: string; message?: string }) {
     setMessage({ tone: "error", text: authErrorMessage(error.code, error.message) });
   }
@@ -181,9 +237,34 @@ export function AccountClient() {
         <div className="shell">
           <header className={styles.heading}><div><p className="eyebrow">账号中心</p><h1>账号与安全</h1><p>管理个人资料、登录方式和已登录设备。</p></div><span><ShieldCheck size={18} /> 安全状态正常</span></header>
           {message && <div className={styles.message} data-tone={message.tone} role={message.tone === "error" ? "alert" : "status"}>{message.text}</div>}
-          <nav className={styles.anchorNav} aria-label="账号设置"><a href="#profile">个人资料</a><a href="#connections">登录方式</a><a href="#security">密码与邮箱</a><a href="#sessions">设备会话</a><a href="#danger">删除账号</a></nav>
+          <nav className={styles.anchorNav} aria-label="账号设置"><a href="#credits">增强额度</a><a href="#profile">个人资料</a><a href="#connections">登录方式</a><a href="#security">密码与邮箱</a><a href="#two-factor">双重验证</a><a href="#sessions">设备会话</a><a href="#data">我的数据</a><a href="#danger">删除账号</a></nav>
 
           <div className={styles.settingsGrid}>
+            <section id="credits" className={`${styles.panel} ${styles.widePanel} ${styles.creditPanel}`}>
+              <PanelTitle icon={Coins} title="DeepSeek 增强优化额度" text="基础编辑、模板、检查与导出始终免费；只有成功的增强优化才扣 1 次。" />
+              {billingStatus === "ready" && billing ? <div className={styles.creditLayout}>
+                <div className={styles.balanceCard}>
+                  <span>当前可用</span>
+                  <strong>{billing.balance.total}<small>次</small></strong>
+                  <p>赠送 {billing.balance.bonus} 次 · 已购 {billing.balance.purchased} 次</p>
+                  <small>{billing.balance.nextExpiryAt
+                    ? `最近一批付费额度 ${new Date(billing.balance.nextExpiryAt).toLocaleDateString("zh-CN")} 到期`
+                    : "赠送额度当前不设期限"}</small>
+                  <Link href="/pricing">查看完整规则 <ArrowRight size={14} /></Link>
+                </div>
+                <div className={styles.accountPacks}>
+                  {billing.packs.map((pack) => <article key={pack.id} data-featured={pack.id === "standard"}>
+                    <div><strong>{pack.name}</strong>{pack.badge && <span>{pack.badge}</span>}</div>
+                    <p><b>{pack.priceLabel}</b><span>{pack.credits} 次 · {pack.unitPriceLabel}</span></p>
+                    <button type="button" disabled aria-label={`${pack.name}支付暂未开放`}>暂未开放</button>
+                  </article>)}
+                </div>
+              </div> : billingStatus === "error" ? (
+                <div className={styles.creditLoading} role="alert">额度暂时无法读取。<button type="button" onClick={() => void loadSecurity()}>重试</button></div>
+              ) : <div className={styles.creditLoading}><LoaderCircle className={styles.spin} size={18} /> 正在读取额度</div>}
+              <p className={styles.creditCaveat}><ShieldCheck size={15} />模型失败、超时、繁忙或回退基础分析时不会扣额度；额度包不自动续费。</p>
+            </section>
+
             <section id="profile" className={styles.panel}><PanelTitle icon={UserRound} title="个人资料" text="用于账号菜单和简历工作区，不会自动写入简历正文。" /><form onSubmit={(event) => void updateProfile(event)}><Field label="姓名或称呼" value={name} onChange={setName} autoComplete="name" /><div className={styles.readonlyField}><span>当前账号</span><strong>{displayEmail(user.email)}</strong><small>{user.emailVerified ? "已验证" : "待验证"}</small></div><button className="button button-primary" type="submit" disabled={busy === "profile"}>{busy === "profile" ? <LoaderCircle className={styles.spin} size={16} /> : <Save size={16} />} 保存资料</button></form></section>
 
             <section id="connections" className={styles.panel}><PanelTitle icon={Link2} title="登录方式" text="主动绑定其他方式后，可以任选一种登录同一账号。" /><div className={styles.connectionList}>
@@ -199,7 +280,11 @@ export function AccountClient() {
 
             <section id="security" className={styles.panel}><PanelTitle icon={LockKeyhole} title="密码与邮箱" text="修改密码会撤销其他设备会话；修改邮箱需要再次确认。" /><form onSubmit={(event) => void changeEmail(event)}><Field label="新邮箱" value={newEmail} onChange={setNewEmail} type="email" autoComplete="email" placeholder="new@example.com" /><button className="button button-secondary" type="submit" disabled={!capabilities?.email || busy === "email"}><Mail size={16} /> 发送邮箱确认</button></form><div className={styles.panelDivider} /><form onSubmit={(event) => void changePassword(event)}><Field label="当前密码" value={currentPassword} onChange={setCurrentPassword} type="password" autoComplete="current-password" /><Field label="新密码" hint="至少 12 位，包含字母和数字" value={newPassword} onChange={setNewPassword} type="password" autoComplete="new-password" /><Field label="确认新密码" value={confirmPassword} onChange={setConfirmPassword} type="password" autoComplete="new-password" /><button className="button button-secondary" type="submit" disabled={busy === "password"}><LockKeyhole size={16} /> 更新密码</button></form></section>
 
+            <AccountTwoFactor enabled={Boolean(user.twoFactorEnabled)} isAdmin={user.role === "admin"} onChanged={async () => { await viewer.refetch(); }} />
+
             <section id="sessions" className={`${styles.panel} ${styles.widePanel}`}><PanelTitle icon={Laptop} title="已登录设备" text="发现不认识的设备时，立即撤销对应会话并修改密码。" /><div className={styles.sessionList}>{sessions.map((item) => <div key={item.id}><span><Laptop size={19} /></span><div><strong>{deviceName(item.userAgent)}</strong><small>{item.ipAddress ?? "IP 未记录"} · {new Date(item.createdAt).toLocaleString("zh-CN")}</small></div>{item.token === currentToken ? <span className={styles.currentSession}>当前设备</span> : <button type="button" disabled={busy === item.token} onClick={() => void revokeSession(item.token)}>退出</button>}</div>)}</div>{sessions.length > 1 && <button className="button button-secondary" type="button" disabled={busy === "sessions"} onClick={() => void revokeOthers()}>退出其他所有设备</button>}</section>
+
+            <section id="data" className={`${styles.panel} ${styles.widePanel}`}><PanelTitle icon={Download} title="下载我的数据" text="导出账号资料、全部简历与版本、协议记录和额度流水；不会包含密码、令牌或双重验证密钥。" /><button className="button button-secondary" type="button" disabled={busy === "export"} onClick={() => void downloadAccountData()}>{busy === "export" ? <LoaderCircle className={styles.spin} size={16} /> : <Download size={16} />} 下载 JSON 数据包</button></section>
 
             <section id="danger" className={`${styles.panel} ${styles.dangerPanel} ${styles.widePanel}`}><PanelTitle icon={Trash2} title="删除账号与个人数据" text="将永久删除简历、版本记录、账号身份和会话，操作不可恢复。" /><div className={styles.dangerForm}><Field label="账号密码（仅邮箱密码账号需要）" value={deletePassword} onChange={setDeletePassword} type="password" autoComplete="current-password" /><Field label="输入“删除账号”确认" value={deleteConfirm} onChange={setDeleteConfirm} /><button type="button" disabled={busy === "delete" || deleteConfirm !== "删除账号"} onClick={() => void deleteAccount()}><Trash2 size={16} /> 永久删除账号</button></div></section>
           </div>

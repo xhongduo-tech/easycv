@@ -31,9 +31,11 @@ describe("DeepSeek resume advisor adapter", () => {
       DEEPSEEK_MODEL: "unapproved-model",
     })).toBeNull();
     expect(getDeepSeekAdvisorConfig({
+      DEEPSEEK_ENABLED: "true",
       DEEPSEEK_API_KEY: config.apiKey,
       DEEPSEEK_BASE_URL: config.baseUrl,
       DEEPSEEK_MODEL: config.model,
+      DEEPSEEK_DAILY_BUDGET_CNY: "200",
     })).toEqual(config);
   });
 
@@ -55,6 +57,11 @@ describe("DeepSeek resume advisor adapter", () => {
       expect(submitted.resume).not.toHaveProperty("projects");
       return new Response(JSON.stringify({
         status: "completed",
+        usage: {
+          input_tokens: 1234,
+          output_tokens: 456,
+          input_tokens_details: { cached_tokens: 120 },
+        },
         output: [{
           type: "reasoning",
           content: [{ type: "reasoning_text", text: "ignored reasoning" }],
@@ -84,6 +91,7 @@ describe("DeepSeek resume advisor adapter", () => {
 
     expect(result.score).toBe(78);
     expect(result.suggestions[0].title).toBe("明确职责");
+    expect(result.modelUsage).toEqual({ inputTokens: 1234, cachedInputTokens: 120, outputTokens: 456 });
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
@@ -108,6 +116,8 @@ describe("DeepSeek resume advisor adapter", () => {
       expect(serialized).not.toContain("PRIVATE_EXPERIENCE_LOCATION_SENTINEL");
       expect(serialized).not.toContain("private-project-link.invalid");
       return new Response(JSON.stringify({
+        status: "completed",
+        usage: { input_tokens: 800, output_tokens: 160, input_tokens_details: { cached_tokens: 80 } },
         output: [{
           type: "message",
           content: [{
@@ -162,6 +172,8 @@ describe("DeepSeek resume advisor adapter", () => {
       expect(submitted.targetBrief).not.toHaveProperty("sourceUrl");
       expect(submitted.targetBrief).not.toHaveProperty("sourceType");
       return new Response(JSON.stringify({
+        status: "completed",
+        usage: { input_tokens: 900, output_tokens: 180, input_tokens_details: { cached_tokens: 90 } },
         output: [{
           type: "message",
           content: [{
@@ -226,6 +238,8 @@ describe("DeepSeek resume advisor adapter", () => {
         label: "某头部互联网公司 · 产品策略实习生",
       }]);
       return new Response(JSON.stringify({
+        status: "completed",
+        usage: { input_tokens: 700, output_tokens: 140, input_tokens_details: { cached_tokens: 70 } },
         output: [{
           type: "message",
           content: [{
@@ -286,6 +300,8 @@ describe("DeepSeek resume advisor adapter", () => {
 
   it("treats a content refusal as request-scoped rather than a provider outage", async () => {
     const fetcher = vi.fn(async () => new Response(JSON.stringify({
+      status: "completed",
+      usage: { input_tokens: 500, output_tokens: 12, input_tokens_details: { cached_tokens: 50 } },
       output: [{
         type: "message",
         content: [{ type: "refusal", refusal: "Cannot assist with this request." }],
@@ -298,7 +314,11 @@ describe("DeepSeek resume advisor adapter", () => {
       section: "experience",
     }, config, fetcher as typeof fetch);
     const error = await request.catch((reason: unknown) => reason);
-    expect(error).toMatchObject({ name: "DeepSeekAdvisorError", kind: "refusal" });
+    expect(error).toMatchObject({
+      name: "DeepSeekAdvisorError",
+      kind: "refusal",
+      usage: { inputTokens: 500, cachedInputTokens: 50, outputTokens: 12 },
+    });
     expect(shouldTripDeepSeekCircuit(error)).toBe(false);
   });
 
@@ -310,11 +330,16 @@ describe("DeepSeek resume advisor adapter", () => {
       section: "experience",
     }, config, vi.fn(async () => new Response(JSON.stringify({
       status: "incomplete",
+      usage: { input_tokens: 600, output_tokens: 20, input_tokens_details: { cached_tokens: 60 } },
       incomplete_details: { reason: "content_filter" },
       output: [],
     }), { status: 200 })) as typeof fetch).catch((reason: unknown) => reason);
     const filteredError = await contentFiltered;
-    expect(filteredError).toMatchObject({ name: "DeepSeekAdvisorError", kind: "refusal" });
+    expect(filteredError).toMatchObject({
+      name: "DeepSeekAdvisorError",
+      kind: "refusal",
+      usage: { inputTokens: 600, cachedInputTokens: 60, outputTokens: 20 },
+    });
     expect(shouldTripDeepSeekCircuit(filteredError)).toBe(false);
 
     const truncated = createDeepSeekAdvice({
@@ -324,11 +349,16 @@ describe("DeepSeek resume advisor adapter", () => {
       section: "experience",
     }, config, vi.fn(async () => new Response(JSON.stringify({
       status: "incomplete",
+      usage: { input_tokens: 650, output_tokens: 30, input_tokens_details: { cached_tokens: 65 } },
       incomplete_details: { reason: "max_output_tokens" },
       output: [],
     }), { status: 200 })) as typeof fetch).catch((reason: unknown) => reason);
     const truncatedError = await truncated;
-    expect(truncatedError).toMatchObject({ name: "DeepSeekAdvisorError", kind: "invalid-output" });
+    expect(truncatedError).toMatchObject({
+      name: "DeepSeekAdvisorError",
+      kind: "invalid-output",
+      usage: { inputTokens: 650, cachedInputTokens: 65, outputTokens: 30 },
+    });
     expect(shouldTripDeepSeekCircuit(truncatedError)).toBe(false);
   });
 

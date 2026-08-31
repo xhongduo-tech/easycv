@@ -12,6 +12,7 @@ export function SiteFooter() {
         <nav aria-label="页脚导航">
           <Link href="/dashboard">我的简历</Link>
           <Link href="/dashboard?new=1">创建简历</Link>
+          <Link href="/pricing">定价与额度</Link>
           <Link href="/privacy">隐私与 AI 说明</Link>
           <Link href="/terms">用户协议</Link>
         </nav>

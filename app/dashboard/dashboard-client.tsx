@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -21,22 +21,22 @@ import {
   ShieldCheck,
   Trash2,
 } from "lucide-react";
-import { ResumePreview } from "@/components/resume-preview";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { TargetBrandMark } from "@/components/target-brand-mark";
 import { formatDate } from "@/lib/utils";
 import { authClient } from "@/lib/auth-client";
-import type { ResumeRecord, ResumeTemplate, Track } from "@/types/resume";
+import type { ResumeRecord, ResumeSummary, Track } from "@/types/resume";
 import { NewResumeDialog } from "./new-resume-dialog";
 import styles from "./dashboard.module.css";
 
 export function DashboardClient({ initialCreate = false, initialTrack }: { initialCreate?: boolean; initialTrack?: Track }) {
   const router = useRouter();
   const viewer = authClient.useSession();
-  const [resumes, setResumes] = useState<ResumeRecord[]>([]);
-  const [templates, setTemplates] = useState<ResumeTemplate[]>([]);
+  const [resumes, setResumes] = useState<ResumeSummary[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | Track>("all");
@@ -48,49 +48,57 @@ export function DashboardClient({ initialCreate = false, initialTrack }: { initi
     router.replace("/dashboard", { scroll: false });
   }, [router]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (cursor?: string) => {
+    const append = Boolean(cursor);
+    if (append) setLoadingMore(true);
+    else setLoading(true);
     setError("");
     try {
-      const [resumeResponse, templateResponse] = await Promise.all([
-        fetch("/api/resumes"),
-        fetch("/api/templates"),
-      ]);
-      const result = (await resumeResponse.json()) as { resumes?: ResumeRecord[]; error?: { message?: string } };
-      const templateResult = (await templateResponse.json()) as { templates?: ResumeTemplate[]; error?: { message?: string } };
+      const params = new URLSearchParams({ limit: "20" });
+      if (filter !== "all") params.set("track", filter);
+      if (query.trim()) params.set("q", query.trim());
+      if (cursor) params.set("cursor", cursor);
+      const resumeResponse = await fetch(`/api/resumes?${params}`, { cache: "no-store" });
+      const result = (await resumeResponse.json()) as {
+        resumes?: ResumeSummary[];
+        nextCursor?: string | null;
+        error?: { message?: string };
+      };
       if (!resumeResponse.ok) throw new Error(result.error?.message ?? "简历列表加载失败");
-      if (!templateResponse.ok) throw new Error(templateResult.error?.message ?? "模板加载失败");
-      setResumes(result.resumes ?? []);
-      setTemplates(templateResult.templates ?? []);
+      setResumes((current) => append ? [...current, ...(result.resumes ?? [])] : (result.resumes ?? []));
+      setNextCursor(result.nextCursor ?? null);
     } catch (reason) {
       setError((reason as Error).message);
     } finally {
-      setLoading(false);
+      if (append) setLoadingMore(false);
+      else setLoading(false);
     }
-  }, []);
+  }, [filter, query]);
 
   useEffect(() => {
-    // Data fetching is intentionally started after hydration.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void load();
-  }, [load]);
+    const timer = window.setTimeout(() => void load(), query.trim() ? 220 : 0);
+    return () => window.clearTimeout(timer);
+  }, [load, query]);
 
   useEffect(() => {
+    const storedClaimError = window.sessionStorage.getItem("jianji:claim-error");
+    let initialErrorTimer: number | undefined;
+    if (storedClaimError) {
+      window.sessionStorage.removeItem("jianji:claim-error");
+      initialErrorTimer = window.setTimeout(() => setError(storedClaimError), 0);
+    }
     const refreshAfterClaim = () => void load();
+    const showClaimError = (event: Event) => setError((event as CustomEvent<string>).detail);
     window.addEventListener("jianji:guest-claimed", refreshAfterClaim);
-    return () => window.removeEventListener("jianji:guest-claimed", refreshAfterClaim);
+    window.addEventListener("jianji:claim-error", showClaimError);
+    return () => {
+      if (initialErrorTimer !== undefined) window.clearTimeout(initialErrorTimer);
+      window.removeEventListener("jianji:guest-claimed", refreshAfterClaim);
+      window.removeEventListener("jianji:claim-error", showClaimError);
+    };
   }, [load]);
 
-  const filtered = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    return resumes.filter((resume) => {
-      const matchesTrack = filter === "all" || resume.track === filter;
-      const matchesQuery = !normalized || [resume.title, resume.targetName].join(" ").toLowerCase().includes(normalized);
-      return matchesTrack && matchesQuery;
-    });
-  }, [filter, query, resumes]);
-
-  async function rename(resume: ResumeRecord) {
+  async function rename(resume: ResumeSummary) {
     const nextTitle = window.prompt("输入新的简历名称", resume.title)?.trim();
     if (!nextTitle || nextTitle === resume.title) return;
     setBusyId(resume.id);
@@ -107,7 +115,7 @@ export function DashboardClient({ initialCreate = false, initialTrack }: { initi
     finally { setBusyId(""); }
   }
 
-  async function duplicate(resume: ResumeRecord) {
+  async function duplicate(resume: ResumeSummary) {
     setBusyId(resume.id);
     try {
       const detailResponse = await fetch(`/api/resumes/${resume.id}`);
@@ -143,7 +151,7 @@ export function DashboardClient({ initialCreate = false, initialTrack }: { initi
     finally { setBusyId(""); }
   }
 
-  async function remove(resume: ResumeRecord) {
+  async function remove(resume: ResumeSummary) {
     if (!window.confirm(`确认删除“${resume.title}”吗？当前演示版不提供恢复入口。`)) return;
     setBusyId(resume.id);
     try {
@@ -182,7 +190,7 @@ export function DashboardClient({ initialCreate = false, initialTrack }: { initi
           )}
 
           <div className={styles.contentHeader}>
-            <div><h2>我的简历</h2><span>{filtered.length} 份</span></div>
+            <div><h2>我的简历</h2><span>{resumes.length}{nextCursor ? "+" : ""} 份</span></div>
             <div className={styles.toolbar}>
               <label><Search size={16} /><span className="sr-only">搜索简历</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索名称或目标" /></label>
               <div className={styles.filters}>
@@ -196,21 +204,22 @@ export function DashboardClient({ initialCreate = false, initialTrack }: { initi
 
           {loading ? (
             <div className={styles.loading}><LoaderCircle className={styles.spin} size={25} /><strong>正在整理你的简历</strong></div>
-          ) : filtered.length === 0 ? (
+          ) : resumes.length === 0 ? (
             <div className={styles.empty}>
               <span><FilePlus2 size={29} /></span>
-              <h2>{resumes.length ? "没有匹配的简历" : "创建你的第一份目标版本"}</h2>
-              <p>{resumes.length ? "尝试调整搜索词或用途筛选。" : "选择用途与目标，系统会自动匹配版式并进入编辑器。"}</p>
-              {!resumes.length && <button className="button button-primary" type="button" onClick={() => setCreateOpen(true)}><Plus size={17} /> 新建简历</button>}
+              <h2>{query.trim() || filter !== "all" ? "没有匹配的简历" : "创建你的第一份目标版本"}</h2>
+              <p>{query.trim() || filter !== "all" ? "尝试调整搜索词或用途筛选。" : "选择用途与目标，系统会自动匹配版式并进入编辑器。"}</p>
+              {!query.trim() && filter === "all" && <button className="button button-primary" type="button" onClick={() => setCreateOpen(true)}><Plus size={17} /> 新建简历</button>}
             </div>
           ) : (
             <div className={view === "grid" ? styles.resumeGrid : styles.resumeList}>
-              {filtered.map((resume) => {
-                const template = templates.find((item) => item.id === resume.templateId);
+              {resumes.map((resume) => {
                 return (
                   <article key={resume.id} className={styles.resumeCard}>
                     <button className={styles.previewButton} type="button" onClick={() => router.push(`/builder/${resume.id}`)} aria-label={`打开 ${resume.title}`}>
-                      <div className={styles.preview}><ResumePreview content={resume.content} template={template} scale="card" /></div>
+                      <div className={styles.summaryPreview} data-track={resume.track}>
+                        <span /><strong>{resume.title.slice(0, 22)}</strong><i /><i /><i /><b /><b />
+                      </div>
                       <span className={styles.trackTag}>{resume.track === "study" ? <GraduationCap size={12} /> : <Building2 size={12} />}{resume.track === "study" ? "留学申请" : "毕业求职"}</span>
                     </button>
                     <div className={styles.cardBody}>
@@ -223,6 +232,14 @@ export function DashboardClient({ initialCreate = false, initialTrack }: { initi
                   </article>
                 );
               })}
+            </div>
+          )}
+          {!loading && nextCursor && (
+            <div className={styles.loadMore}>
+              <button className="button button-secondary" type="button" disabled={loadingMore} onClick={() => void load(nextCursor)}>
+                {loadingMore ? <LoaderCircle className={styles.spin} size={16} /> : <ArrowRight size={16} />}
+                {loadingMore ? "正在加载" : "加载更多"}
+              </button>
             </div>
           )}
         </div>

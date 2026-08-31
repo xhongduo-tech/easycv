@@ -7,13 +7,18 @@
     "node": ">=22.13.0"
   },
   "scripts": {
+    "predev": "npm run db:migrate:local",
+    "db:migrate:local": "node scripts/prepare-local-d1.mjs",
+    "db:verify": "node scripts/verify-legacy-schema-adoption.mjs && vitest run tests/database-migrations.test.ts",
     "dev": "vinext dev",
     "build": "vinext build",
     "start": "vinext start",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "verify": "npm run typecheck && npm run lint && npm test && npm run build",
+    "verify:release": "npm run db:migrate:local && npm run db:verify && npm run verify"
   },
   "dependencies": {
     "better-auth": "1.7.2",

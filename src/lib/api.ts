@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import type { ZodError, ZodType } from "zod";
 import { SessionRateLimitError } from "@/../db";
+import { LegalAcceptanceRequiredError } from "@/lib/legal-acceptance";
+import { ResumeLimitError } from "@/lib/resume-policy";
+import { MfaVerificationRequiredError } from "@/lib/session-assurance";
+import { AiCreditSettlementUncertainError } from "@/lib/credits";
+import { logOperationalEvent } from "@/lib/operational-log";
 import { formatValidationIssues } from "@/lib/validation";
 
 export type ApiErrorCode =
@@ -10,6 +15,16 @@ export type ApiErrorCode =
   | "CONFLICT"
   | "FORBIDDEN"
   | "RATE_LIMITED"
+  | "MODEL_REQUEST_ACTIVE"
+  | "IDEMPOTENCY_IN_PROGRESS"
+  | "IDEMPOTENCY_CONFLICT"
+  | "IDEMPOTENCY_EXPIRED"
+  | "MFA_REQUIRED"
+  | "REAUTH_REQUIRED"
+  | "LEGAL_ACCEPTANCE_REQUIRED"
+  | "RESOURCE_LIMIT_REACHED"
+  | "SERVICE_DISABLED"
+  | "SETTLEMENT_PENDING"
   | "PAYLOAD_TOO_LARGE"
   | "INTERNAL_ERROR";
 
@@ -74,6 +89,25 @@ export function withApiError(error: unknown) {
   if (error instanceof SessionRateLimitError) {
     return apiError(429, "RATE_LIMITED", "新建访客空间过于频繁，请稍后再试");
   }
-  console.error("API request failed", error instanceof Error ? error.message : "Unknown error");
+  if (error instanceof LegalAcceptanceRequiredError) {
+    return apiError(428, "LEGAL_ACCEPTANCE_REQUIRED", "请先确认最新用户协议与隐私说明");
+  }
+  if (error instanceof ResumeLimitError) {
+    return apiError(409, "RESOURCE_LIMIT_REACHED", "简历数量已达到当前账号上限，请先整理已有简历");
+  }
+  if (error instanceof MfaVerificationRequiredError) {
+    return apiError(403, "MFA_REQUIRED", "请先完成当前会话的双重验证");
+  }
+  if (error instanceof AiCreditSettlementUncertainError) {
+    logOperationalEvent("warn", "ai.settlement_pending", {
+      errorName: error.name,
+    });
+    const response = apiError(503, "SETTLEMENT_PENDING", "增强结果正在核对中，请使用同一请求稍后重试");
+    response.headers.set("retry-after", "2");
+    return response;
+  }
+  logOperationalEvent("error", "api.unhandled_error", {
+    errorName: error instanceof Error ? error.name : "UnknownError",
+  });
   return apiError(500, "INTERNAL_ERROR", "服务暂时不可用，请稍后重试");
 }

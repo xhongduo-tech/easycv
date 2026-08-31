@@ -180,6 +180,7 @@ export function HomepageStory() {
             className={index === activeStep ? styles.storyTabActive : undefined}
             type="button"
             aria-pressed={index === activeStep}
+            aria-label={`${step.number} ${step.shortLabel}：${step.title}`}
             onClick={() => selectStep(index)}
           >
             <span>{step.number}</span><strong>{step.shortLabel}</strong>

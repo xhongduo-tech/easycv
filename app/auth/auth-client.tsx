@@ -53,6 +53,10 @@ export function AuthClient({
 }) {
   const router = useRouter();
   const destination = useMemo(() => safeReturnTo(returnTo), [returnTo]);
+  const consentDestination = useMemo(
+    () => `/auth/consent?returnTo=${encodeURIComponent(destination)}`,
+    [destination],
+  );
   const [capabilities, setCapabilities] = useState<AuthCapabilities>(emptyCapabilities);
   const [capabilitiesReady, setCapabilitiesReady] = useState(false);
   const [method, setMethod] = useState<"email" | "phone">("email");
@@ -99,11 +103,17 @@ export function AuthClient({
       email: email.trim(),
       password,
       rememberMe: remember,
-      callbackURL: destination,
+      callbackURL: consentDestination,
     });
     setBusy("");
     if (result.error) return showError(result.error);
-    router.push(destination);
+    if ((result.data as { twoFactorRedirect?: boolean } | null)?.twoFactorRedirect) {
+      window.sessionStorage.setItem("jianji:mfa-return-to", destination);
+      router.replace(`/auth/two-factor?returnTo=${encodeURIComponent(destination)}`);
+      router.refresh();
+      return;
+    }
+    router.push(consentDestination);
     router.refresh();
   }
 
@@ -118,7 +128,7 @@ export function AuthClient({
       name: name.trim(),
       email: email.trim(),
       password,
-      callbackURL: destination,
+      callbackURL: consentDestination,
     });
     setBusy("");
     if (result.error) return showError(result.error);
@@ -155,7 +165,7 @@ export function AuthClient({
     const result = await authClient.phoneNumber.verify({ phoneNumber: normalizedPhone, code: otp });
     setBusy("");
     if (result.error) return showError(result.error);
-    router.push(destination);
+    router.push(consentDestination);
     router.refresh();
   }
 
@@ -195,7 +205,7 @@ export function AuthClient({
     setBusy(provider);
     const result = await authClient.signIn.social({
       provider,
-      callbackURL: destination,
+      callbackURL: consentDestination,
       errorCallbackURL: "/auth/login?error=PROVIDER_NOT_FOUND",
     });
     if (result?.error) {
@@ -308,7 +318,7 @@ export function AuthClient({
   );
 }
 
-function AuthShell({ children }: { children: React.ReactNode }) {
+export function AuthShell({ children }: { children: React.ReactNode }) {
   return <main className={styles.page}><div className={styles.layout}><aside className={styles.intro}><Brand /><div><p className="eyebrow">简历属于你</p><h2>从访客草稿，到长期可管理的个人作品。</h2><p>安全登录、跨设备保存，并由你决定绑定哪些登录方式。</p></div><ul><li><ShieldCheck size={18} /> 登录后自动迁移当前草稿</li><li><LockKeyhole size={18} /> 密码加密、会话可撤销</li><li><QrCode size={18} /> 中国地区支持微信与手机号</li></ul></aside><div className={styles.cardColumn}><Link className={styles.backHome} href="/"><ArrowLeft size={15} /> 返回首页</Link>{children}<p className={styles.securityNote}><ShieldCheck size={14} /> 认证信息只用于账号安全与数据归属</p></div></div></main>;
 }
 

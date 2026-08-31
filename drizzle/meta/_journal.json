@@ -36,6 +36,55 @@
       "when": 1788166800000,
       "tag": "0004_complete_auth",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1788192000000,
+      "tag": "0005_ai_credits_pricing",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1788195600000,
+      "tag": "0006_model_advice_deliveries",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1788199200000,
+      "tag": "0007_schema_readiness",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1788202800000,
+      "tag": "0008_admin_two_factor",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1788206400000,
+      "tag": "0009_signup_promo_redemptions",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1788210000000,
+      "tag": "0010_ai_request_lifecycle",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1788213600000,
+      "tag": "0011_integrity_constraints",
+      "breakpoints": true
     }
   ]
 }

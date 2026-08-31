@@ -10,11 +10,16 @@ import {
   type RewriteFocus,
 } from "@/lib/rewrite-proposals";
 import type { AdvisorResult, AdvisorSection, ResumeContent, RewriteSourceRef, TargetBrief, TargetProfile, Track } from "@/types/resume";
+import type { ModelTokenUsage } from "@/lib/pricing";
 
 export interface DeepSeekAdvisorConfig {
   apiKey: string;
   baseUrl: string;
   model: string;
+}
+
+export interface DeepSeekAdviceResult extends AdvisorResult {
+  modelUsage: ModelTokenUsage;
 }
 
 export type DeepSeekAdvisorErrorKind =
@@ -26,10 +31,15 @@ export type DeepSeekAdvisorErrorKind =
   | "configuration"
   | "client"
   | "refusal"
+  | "fact-gate"
   | "invalid-output";
 
 export class DeepSeekAdvisorError extends Error {
-  constructor(public readonly kind: DeepSeekAdvisorErrorKind, message: string) {
+  constructor(
+    public readonly kind: DeepSeekAdvisorErrorKind,
+    message: string,
+    public readonly usage?: ModelTokenUsage,
+  ) {
     super(message);
     this.name = "DeepSeekAdvisorError";
   }
@@ -42,7 +52,7 @@ export function shouldTripDeepSeekCircuit(error: unknown) {
 
 export function shouldResetDeepSeekCircuit(error: unknown) {
   return error instanceof DeepSeekAdvisorError
-    && ["client", "refusal", "invalid-output"].includes(error.kind);
+    && ["client", "refusal", "fact-gate", "invalid-output"].includes(error.kind);
 }
 
 interface DeepSeekAdvisorInput {
@@ -154,12 +164,28 @@ const supportedDeepSeekModels = new Set([
   "deepseek-v4-flash-vision-exp",
 ]);
 
+const tokenCountSchema = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
+const providerUsageSchema = z.object({
+  input_tokens: tokenCountSchema,
+  output_tokens: tokenCountSchema,
+  input_tokens_details: z.object({
+    cached_tokens: tokenCountSchema.optional().default(0),
+  }).passthrough().optional(),
+}).passthrough().superRefine((usage, context) => {
+  if ((usage.input_tokens_details?.cached_tokens ?? 0) > usage.input_tokens) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "cached tokens exceed input tokens" });
+  }
+});
+
 export function getDeepSeekAdvisorConfig(runtimeEnv: unknown): DeepSeekAdvisorConfig | null {
   const values = runtimeEnv as {
+    DEEPSEEK_ENABLED?: unknown;
     DEEPSEEK_API_KEY?: unknown;
     DEEPSEEK_BASE_URL?: unknown;
     DEEPSEEK_MODEL?: unknown;
+    DEEPSEEK_DAILY_BUDGET_CNY?: unknown;
   };
+  if (values.DEEPSEEK_ENABLED !== "true" || getDeepSeekDailyBudgetMicros(values) === null) return null;
   const apiKey = typeof values.DEEPSEEK_API_KEY === "string" ? values.DEEPSEEK_API_KEY.trim() : "";
   const rawBaseUrl = typeof values.DEEPSEEK_BASE_URL === "string" ? values.DEEPSEEK_BASE_URL.trim() : "";
   const model = typeof values.DEEPSEEK_MODEL === "string" ? values.DEEPSEEK_MODEL.trim() : "";
@@ -167,11 +193,20 @@ export function getDeepSeekAdvisorConfig(runtimeEnv: unknown): DeepSeekAdvisorCo
   return apiKey && baseUrl && supportedDeepSeekModels.has(model) ? { apiKey, baseUrl, model } : null;
 }
 
+export function getDeepSeekDailyBudgetMicros(runtimeEnv: unknown) {
+  const raw = (runtimeEnv as { DEEPSEEK_DAILY_BUDGET_CNY?: unknown }).DEEPSEEK_DAILY_BUDGET_CNY;
+  if (typeof raw !== "string" || !/^(?:0|[1-9]\d*)(?:\.\d{1,6})?$/.test(raw.trim())) return null;
+  const yuan = Number(raw);
+  if (!Number.isFinite(yuan) || yuan <= 0 || yuan > 100_000) return null;
+  const micros = Math.round(yuan * 1_000_000);
+  return Number.isSafeInteger(micros) && micros > 0 ? micros : null;
+}
+
 export async function createDeepSeekAdvice(
   input: DeepSeekAdvisorInput,
   config: DeepSeekAdvisorConfig,
   fetcher: typeof fetch = fetch,
-): Promise<AdvisorResult> {
+): Promise<DeepSeekAdviceResult> {
   const jobFit = input.track === "career" && input.targetBrief?.requirementsText
     ? analyzeJobFit(input.content, input.targetBrief)
     : undefined;
@@ -278,6 +313,11 @@ export async function createDeepSeekAdvice(
       error?: { code?: string; message?: string } | null;
       incomplete_details?: { reason?: "max_output_tokens" | "content_filter" } | null;
       output?: Array<{ type?: string; content?: Array<{ type?: string; text?: string; refusal?: string }> }>;
+      usage?: {
+        input_tokens?: number;
+        output_tokens?: number;
+        input_tokens_details?: { cached_tokens?: number };
+      };
     };
     try {
       payload = await response.json() as typeof payload;
@@ -292,25 +332,37 @@ export async function createDeepSeekAdvice(
         error instanceof Error ? error.message : "DeepSeek response body could not be read",
       );
     }
+    if (!new Set(["completed", "failed", "incomplete"]).has(payload.status ?? "")) {
+      throw new DeepSeekAdvisorError("invalid-output", "DeepSeek response status was missing or invalid");
+    }
+    let usage: ModelTokenUsage | undefined;
+    try {
+      usage = parseModelUsage(payload.usage, payload.status === "completed");
+    } catch {
+      if (payload.status === "completed") {
+        throw new DeepSeekAdvisorError("invalid-output", "DeepSeek response contained invalid token usage");
+      }
+    }
     if (payload.status === "failed") {
       const code = payload.error?.code?.toLowerCase() ?? "";
       const kind: DeepSeekAdvisorErrorKind = /auth|balance|credit|model|permission/.test(code)
         ? "configuration"
         : "server";
-      throw new DeepSeekAdvisorError(kind, "DeepSeek response failed");
+      throw new DeepSeekAdvisorError(kind, "DeepSeek response failed", usage);
     }
     if (payload.status === "incomplete") {
       const reason = payload.incomplete_details?.reason;
       throw new DeepSeekAdvisorError(
         reason === "content_filter" ? "refusal" : "invalid-output",
         reason === "content_filter" ? "DeepSeek declined this request" : "DeepSeek response was incomplete",
+        usage,
       );
     }
     const refused = payload.output
       ?.filter((item) => item.type === "message")
       .flatMap((item) => item.content ?? [])
       .some((item) => item.type === "refusal");
-    if (refused) throw new DeepSeekAdvisorError("refusal", "DeepSeek declined this request");
+    if (refused) throw new DeepSeekAdvisorError("refusal", "DeepSeek declined this request", usage);
     const outputText = payload.output
       ?.filter((item) => item.type === "message")
       .flatMap((item) => item.content ?? [])
@@ -318,30 +370,73 @@ export async function createDeepSeekAdvice(
       .map((item) => item.text ?? "")
       .join("")
       .trim();
-    if (!outputText) throw new DeepSeekAdvisorError("invalid-output", "DeepSeek response did not contain structured text");
-    try {
-      const parsed = advisorResultSchema.parse(JSON.parse(outputText));
-      const rawProposals = parsed.rewriteProposals.map(normalizeRawRewriteProposal);
-      const grounded = finalizeModelRewriteProposals(
-        rawProposals,
-        input.content,
-        input.section,
-        jobFit,
-        input.rewriteFocus,
+    if (!outputText) {
+      throw new DeepSeekAdvisorError(
+        "invalid-output",
+        "DeepSeek response did not contain structured text",
+        usage,
       );
-      return {
-        ...parsed,
-        rewriteProposals: grounded.length
-          ? grounded
-          : createLocalRewriteProposals(input.content, input.section, jobFit, input.rewriteFocus),
-      };
-    } catch {
-      throw new DeepSeekAdvisorError("invalid-output", "DeepSeek structured output failed validation");
     }
+    if (!usage) {
+      throw new DeepSeekAdvisorError(
+        "invalid-output",
+        "DeepSeek response did not include billable token usage",
+      );
+    }
+    let parsed: z.infer<typeof advisorResultSchema>;
+    try {
+      parsed = advisorResultSchema.parse(JSON.parse(outputText));
+    } catch {
+      throw new DeepSeekAdvisorError(
+        "invalid-output",
+        "DeepSeek structured output failed validation",
+        usage,
+      );
+    }
+    const rawProposals = parsed.rewriteProposals.map(normalizeRawRewriteProposal);
+    const grounded = finalizeModelRewriteProposals(
+      rawProposals,
+      input.content,
+      input.section,
+      jobFit,
+      input.rewriteFocus,
+    );
+    if (input.rewriteFocus && grounded.length === 0) {
+      throw new DeepSeekAdvisorError(
+        "fact-gate",
+        "DeepSeek targeted rewrite did not pass the fact gate",
+        usage,
+      );
+    }
+    const safeProposals = grounded.length
+      ? grounded
+      : createLocalRewriteProposals(input.content, input.section, jobFit, input.rewriteFocus);
+    return {
+      ...parsed,
+      rewrite: safeProposals[0]?.draftText ?? "当前事实不足以生成安全改写，请先补充可核实信息。",
+      rewriteProposals: safeProposals,
+      modelUsage: usage,
+    };
   } finally {
     clearTimeout(timeout);
     input.signal?.removeEventListener("abort", cancelFromCaller);
   }
+}
+
+function parseModelUsage(usage: {
+  input_tokens?: number;
+  output_tokens?: number;
+  input_tokens_details?: { cached_tokens?: number };
+} | undefined, requirePositive: boolean): ModelTokenUsage {
+  const parsed = providerUsageSchema.parse(usage);
+  if (requirePositive && (parsed.input_tokens <= 0 || parsed.output_tokens <= 0)) {
+    throw new Error("Completed provider usage must include positive input and output tokens");
+  }
+  return {
+    inputTokens: parsed.input_tokens,
+    cachedInputTokens: parsed.input_tokens_details?.cached_tokens ?? 0,
+    outputTokens: parsed.output_tokens,
+  };
 }
 
 function contentForSection(content: ResumeContent, section: DeepSeekAdvisorInput["section"]) {

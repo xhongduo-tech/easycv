@@ -22,6 +22,7 @@ describe("recommendation contract", () => {
   it("requires an owned saved resume identifier", () => {
     expect(recommendationRequestSchema.safeParse({ section: "overview" }).success).toBe(false);
     expect(recommendationRequestSchema.safeParse({
+      requestId: "8f239696-816d-4823-b06f-033ccdd25b57",
       resumeId: "d9428888-122b-4f48-9f9e-5ab869503e6d",
       section: "overview",
     }).success).toBe(true);
@@ -29,6 +30,7 @@ describe("recommendation contract", () => {
 
   it("requires a valid requirement and narrative source pair for targeted rewriting", () => {
     const base = {
+      requestId: "8f239696-816d-4823-b06f-033ccdd25b57",
       resumeId: "d9428888-122b-4f48-9f9e-5ab869503e6d",
       section: "experience" as const,
     };

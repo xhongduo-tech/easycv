@@ -90,6 +90,8 @@ export interface ResumeRecord {
   updatedAt: string;
 }
 
+export type ResumeSummary = Omit<ResumeRecord, "userId" | "content" | "targetBrief">;
+
 export interface TargetBrief {
   resumeId: string;
   kind: TargetBriefKind;
@@ -131,6 +133,9 @@ export interface AdminOverview {
     activeTemplates: number;
     targetProfiles: number;
     averageProgress: number;
+    modelRunsToday: number;
+    estimatedModelCostTodayYuan: number;
+    outstandingAiCredits: number;
   };
   recentResumes: AdminResumeSummary[];
   trackBreakdown: Array<{ label: string; value: number }>;

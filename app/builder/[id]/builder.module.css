@@ -651,6 +651,7 @@
 .evidenceQuote .evidenceRewriteButton {
   display: inline-flex;
   min-width: 112px;
+  min-height: 44px;
   align-items: center;
   justify-content: center;
   gap: 5px;
@@ -660,7 +661,7 @@
   border-radius: 0 8px 8px 0;
   color: var(--brand);
   background: #fbfaff;
-  font-size: .52rem;
+  font-size: .66rem;
   font-weight: 740;
 }
 
@@ -1123,12 +1124,15 @@
 
 .modelMode label {
   display: flex;
+  min-height: 44px;
   align-items: center;
   gap: 7px;
   cursor: pointer;
-  font-size: .59rem;
+  font-size: .74rem;
   font-weight: 720;
 }
+
+.modelMode label[data-disabled="true"] { cursor: not-allowed; opacity: .55; }
 
 .modelMode input {
   position: absolute;
@@ -1137,8 +1141,8 @@
 
 .modelMode label > span {
   display: grid;
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   flex: none;
   place-items: center;
   border: 1px solid var(--border-strong);
@@ -1150,7 +1154,11 @@
 .modelMode input:checked + span { border-color: var(--brand); color: white; background: var(--brand); }
 .modelMode input:focus-visible + span { outline: 3px solid rgba(92, 62, 232, .3); outline-offset: 2px; }
 .modelMode small,
-.modelMode p { display: block; margin: 7px 0 0; color: var(--muted); font-size: .52rem; line-height: 1.45; }
+.modelMode p { display: block; margin: 7px 0 0; color: var(--muted); font-size: .68rem; line-height: 1.5; }
+
+.creditMeta { display: flex; min-height: 44px; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 10px; margin-top: 8px; border-radius: 7px; color: var(--brand-dark); background: var(--brand-soft); font-size: .68rem; font-weight: 700; }
+.creditMeta a { flex: none; text-decoration: underline; text-underline-offset: 2px; }
+.modelMode .creditEmpty { color: var(--warning); }
 
 .adviceHeader > div {
   display: flex;
@@ -1244,6 +1252,8 @@
 
 .adviceResultHeader > span,
 .adviceResultHeader > small { color: rgba(255, 255, 255, .62); font-size: .52rem; }
+.adviceResultHeader > .creditOutcome { width: max-content; max-width: 100%; padding: 5px 7px; border-radius: 6px; color: rgba(255, 255, 255, .76); background: rgba(255, 255, 255, .09); }
+.adviceResultHeader > .creditOutcome[data-charged="true"] { color: var(--lime); }
 .adviceResultHeader h2 { margin: 0; outline: 0; font-size: .7rem; line-height: 1.5; }
 .adviceResultHeader h2:focus-visible { box-shadow: 0 0 0 3px rgba(255, 255, 255, .28); }
 
@@ -1502,12 +1512,12 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-height: 34px;
+  min-height: 44px;
   border: 1px solid var(--border);
   border-radius: 8px;
   cursor: pointer;
   background: white;
-  font-size: 0.57rem;
+  font-size: 0.68rem;
   font-weight: 690;
 }
 

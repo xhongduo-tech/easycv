@@ -1,14 +1,15 @@
 import { env, waitUntil } from "cloudflare:workers";
 import { betterAuth } from "better-auth";
-import { admin, phoneNumber } from "better-auth/plugins";
+import { admin, phoneNumber, twoFactor } from "better-auth/plugins";
 import { authRoles } from "@/lib/auth-access";
+import { deleteApplicationData } from "@/lib/account-deletion";
 import { getAuthCapabilities, sendAuthEmail, sendPhoneOtp } from "@/lib/auth-notifications";
 import { normalizeMainlandPhone } from "@/lib/auth-utils";
+import { resolveAuthRuntime } from "@/lib/auth-runtime";
+import { syncSignupPromoIdentities } from "@/lib/credits";
 
-const baseURL = env.BETTER_AUTH_URL ?? env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-const localAuth = ["localhost", "127.0.0.1"].includes(new URL(baseURL).hostname);
-const secret = env.BETTER_AUTH_SECRET
-  ?? (localAuth ? "jianji-local-development-secret-change-before-production" : undefined);
+const runtime = resolveAuthRuntime(env);
+const { baseURL, secret } = runtime;
 const capabilities = getAuthCapabilities();
 const adminEmails = new Set(
   (env.AUTH_ADMIN_EMAILS ?? "")
@@ -17,7 +18,21 @@ const adminEmails = new Set(
     .filter(Boolean),
 );
 
-if (!secret) throw new Error("BETTER_AUTH_SECRET is required outside local development");
+const PROMO_IDENTITY_FIELDS = new Set([
+  "email",
+  "emailVerified",
+  "phoneNumber",
+  "phoneNumberVerified",
+]);
+
+async function syncCurrentSignupPromoIdentities(userId: string | undefined) {
+  if (!userId) return;
+  await syncSignupPromoIdentities(env.DB, userId, env.PROMO_REDEMPTION_PEPPER);
+}
+
+export function isConfiguredAdminEmail(email: string | null | undefined) {
+  return Boolean(email && adminEmails.has(email.trim().toLowerCase()));
+}
 
 const socialProviders = {
   ...(capabilities.google ? {
@@ -40,9 +55,11 @@ export const auth = betterAuth({
   baseURL,
   basePath: "/api/auth",
   secret,
+  ...(runtime.secrets ? { secrets: runtime.secrets } : {}),
   database: env.DB,
-  trustedOrigins: [baseURL, "http://localhost:3000", "http://127.0.0.1:3000"],
+  trustedOrigins: runtime.trustedOrigins,
   advanced: {
+    useSecureCookies: runtime.appEnvironment === "production",
     ipAddress: {
       ipAddressHeaders: ["cf-connecting-ip"],
       ipv6Subnet: 64,
@@ -115,7 +132,7 @@ export const auth = betterAuth({
     deleteUser: {
       enabled: true,
       async beforeDelete(user) {
-        await deleteApplicationData(user.id);
+        await deleteApplicationData(env.DB, user.id, env.PROMO_REDEMPTION_PEPPER);
       },
     },
   },
@@ -132,7 +149,15 @@ export const auth = betterAuth({
       userAgent: "user_agent",
       userId: "user_id",
     },
-    cookieCache: { enabled: true, maxAge: 60 * 5, strategy: "jwe" },
+    additionalFields: {
+      adminMfaVerifiedAt: {
+        type: "date",
+        required: false,
+        input: false,
+        returned: false,
+        fieldName: "admin_mfa_verified_at",
+      },
+    },
   },
   account: {
     modelName: "auth_accounts",
@@ -184,14 +209,66 @@ export const auth = betterAuth({
   databaseHooks: {
     user: {
       create: {
-        async before(user) {
-          if (!adminEmails.has(user.email.toLowerCase())) return;
-          return { data: { ...user, role: "admin" } };
+        async after(user) {
+          await syncCurrentSignupPromoIdentities(user.id);
+        },
+      },
+      update: {
+        async before(update, context) {
+          if (!Object.keys(update).some((key) => PROMO_IDENTITY_FIELDS.has(key))) return;
+          const currentUserId = context?.context.session?.user.id
+            ?? context?.context.newSession?.user.id;
+          await syncCurrentSignupPromoIdentities(currentUserId);
+        },
+        async after(user) {
+          await syncCurrentSignupPromoIdentities(user.id);
+        },
+      },
+    },
+    account: {
+      create: {
+        async after(account) {
+          await syncCurrentSignupPromoIdentities(account.userId);
+        },
+      },
+      delete: {
+        async before(account) {
+          await syncCurrentSignupPromoIdentities(account.userId);
+        },
+      },
+    },
+    session: {
+      create: {
+        async before(session, context) {
+          if (!new Set([
+            "/two-factor/verify-totp",
+            "/two-factor/verify-backup-code",
+          ]).has(context?.path ?? "")) return;
+          return { data: { ...session, adminMfaVerifiedAt: new Date() } };
         },
       },
     },
   },
   plugins: [
+    twoFactor({
+      issuer: "简迹 CV",
+      twoFactorTable: "auth_two_factors",
+      allowPasswordless: true,
+      trustDeviceMaxAge: 60 * 60 * 24 * 14,
+      accountLockout: { enabled: true, maxFailedAttempts: 8, durationSeconds: 15 * 60 },
+      schema: {
+        user: { fields: { twoFactorEnabled: "two_factor_enabled" } },
+        twoFactor: {
+          modelName: "auth_two_factors",
+          fields: {
+            userId: "user_id",
+            backupCodes: "backup_codes",
+            failedVerificationCount: "failed_verification_count",
+            lockedUntil: "locked_until",
+          },
+        },
+      },
+    }),
     phoneNumber({
       otpLength: 6,
       expiresIn: 5 * 60,
@@ -200,6 +277,7 @@ export const auth = betterAuth({
       phoneNumberValidator: (value) => Boolean(normalizeMainlandPhone(value)),
       sendOTP: ({ phoneNumber: value, code }) => sendPhoneOtp(value, code),
       sendPasswordResetOTP: ({ phoneNumber: value, code }) => sendPhoneOtp(value, code),
+      callbackOnVerification: ({ user }) => syncCurrentSignupPromoIdentities(user.id),
       signUpOnVerification: {
         getTempEmail: () => `phone-${crypto.randomUUID()}@phone.jianji.invalid`,
         getTempName: (value) => `用户 ${value.slice(-4)}`,
@@ -232,20 +310,3 @@ export const auth = betterAuth({
     }),
   ],
 });
-
-async function deleteApplicationData(userId: string) {
-  const db = env.DB;
-  await db.batch([
-    db.prepare("DELETE FROM model_request_leases WHERE request_id IN (SELECT request_id FROM model_session_leases WHERE owner_key = ?)").bind(userId),
-    db.prepare("DELETE FROM model_session_leases WHERE owner_key = ?").bind(userId),
-    db.prepare("DELETE FROM suggestion_events WHERE resume_id IN (SELECT id FROM resumes WHERE user_id = ?)").bind(userId),
-    db.prepare("DELETE FROM resume_versions WHERE resume_id IN (SELECT id FROM resumes WHERE user_id = ?)").bind(userId),
-    db.prepare("DELETE FROM resume_target_briefs WHERE user_id = ? OR resume_id IN (SELECT id FROM resumes WHERE user_id = ?)").bind(userId, userId),
-    db.prepare("DELETE FROM model_consent_events WHERE user_id = ?").bind(userId),
-    db.prepare("DELETE FROM advice_usage_events WHERE user_id = ?").bind(userId),
-    db.prepare("DELETE FROM model_usage_events WHERE user_id = ?").bind(userId),
-    db.prepare("DELETE FROM audit_events WHERE actor_id = ?").bind(userId),
-    db.prepare("DELETE FROM resumes WHERE user_id = ?").bind(userId),
-    db.prepare("DELETE FROM guest_sessions WHERE user_id = ?").bind(userId),
-  ]);
-}

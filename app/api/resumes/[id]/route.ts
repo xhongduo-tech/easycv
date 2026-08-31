@@ -4,6 +4,7 @@ import { apiError, parseRequest, rejectCrossOrigin, withApiError } from "@/lib/a
 import { mapResume, mapTargetBrief, type ResumeRow, type TargetBriefRow, type TargetRow } from "@/lib/db-mappers";
 import { calculateProgress } from "@/lib/utils";
 import { resumeIdParamSchema, updateResumeSchema } from "@/lib/validation";
+import { writeResumeRevision } from "@/lib/resume-store";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -92,40 +93,41 @@ export async function PATCH(request: Request, context: RouteContext) {
       .first<{ id: string }>();
     if (!compatibleTemplate) return withSessionCookie(apiError(422, "VALIDATION_ERROR", "模板与当前赛道不匹配"), session);
 
-    const revision = current.revision + 1;
     const now = new Date().toISOString();
     const contentJson = JSON.stringify(content);
-    const updated = await db
-      .prepare(`UPDATE resumes SET
-          title = ?, track = ?, target_profile_id = ?, target_name = ?, template_id = ?, status = ?,
-          progress = ?, revision = ?, content_json = ?, updated_at = ?
-          WHERE id = ? AND user_id = ? AND revision = ?
-          RETURNING *`)
-      .bind(
-          parsed.data.title ?? current.title,
-          effectiveTrack,
-          targetProfileId,
-          targetName,
-          templateId,
-          parsed.data.status ?? current.status,
-          calculateProgress(content),
-          revision,
-          contentJson,
-          now,
-          current.id,
-          session.userId,
-          current.revision,
-        )
-      .first<ResumeRow>();
+    const nextTitle = parsed.data.title ?? current.title;
+    const nextStatus = parsed.data.status ?? current.status;
+    const nextProgress = calculateProgress(content);
+    const unchanged = nextTitle === current.title
+      && effectiveTrack === current.track
+      && targetProfileId === current.target_profile_id
+      && targetName === current.target_name
+      && templateId === current.template_id
+      && nextStatus === current.status
+      && nextProgress === current.progress
+      && contentJson === current.content_json;
+    if (unchanged) {
+      return withSessionCookie(NextResponse.json({ resume: mapResume(current) }), session);
+    }
+    const updated = await writeResumeRevision(db, {
+      id: current.id,
+      userId: session.userId,
+      expectedRevision: current.revision,
+      title: nextTitle,
+      track: effectiveTrack,
+      targetProfileId,
+      targetName,
+      templateId,
+      status: nextStatus,
+      progress: nextProgress,
+      contentJson,
+      deletedAt: null,
+      now,
+    });
     if (!updated) {
       return withSessionCookie(apiError(409, "CONFLICT", "这份简历刚刚被更新，请刷新后重试"), session);
     }
-    await db
-      .prepare(`INSERT INTO resume_versions (id, resume_id, revision, content_json, created_at)
-          VALUES (?, ?, ?, ?, ?)`)
-      .bind(crypto.randomUUID(), current.id, revision, contentJson, now)
-      .run();
-    await recordAudit(session.userId, "resume.updated", "resume", current.id, { revision }).catch(() => undefined);
+    await recordAudit(session.userId, "resume.updated", "resume", current.id, { revision: updated.revision }).catch(() => undefined);
     return withSessionCookie(NextResponse.json({ resume: mapResume(updated) }), session);
   } catch (error) {
     return withApiError(error);
@@ -144,13 +146,22 @@ export async function DELETE(request: Request, context: RouteContext) {
     const current = await getOwnedResume(params.data.id, session.userId);
     if (!current) return withSessionCookie(apiError(404, "NOT_FOUND", "没有找到这份简历"), session);
     const now = new Date().toISOString();
-    const result = await getDatabase()
-      .prepare(
-        "UPDATE resumes SET status = 'archived', deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND user_id = ? AND revision = ?",
-      )
-      .bind(now, now, current.id, session.userId, current.revision)
-      .run();
-    if (!result.meta.changes) return withSessionCookie(apiError(409, "CONFLICT", "归档前简历已被更新，请重试"), session);
+    const updated = await writeResumeRevision(getDatabase(), {
+      id: current.id,
+      userId: session.userId,
+      expectedRevision: current.revision,
+      title: current.title,
+      track: current.track,
+      targetProfileId: current.target_profile_id,
+      targetName: current.target_name,
+      templateId: current.template_id,
+      status: "archived",
+      progress: current.progress,
+      contentJson: current.content_json,
+      deletedAt: now,
+      now,
+    });
+    if (!updated) return withSessionCookie(apiError(409, "CONFLICT", "归档前简历已被更新，请重试"), session);
     await recordAudit(session.userId, "resume.archived", "resume", current.id).catch(() => undefined);
     return withSessionCookie(new NextResponse(null, { status: 204 }), session);
   } catch (error) {

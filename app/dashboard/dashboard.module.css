@@ -43,6 +43,27 @@
 .resumeCard:hover { box-shadow: var(--shadow-md); transform: translateY(-4px); }
 .previewButton { position: relative; display: block; width: 100%; height: 270px; overflow: hidden; padding: 24px 42px 0; cursor: pointer; background: linear-gradient(145deg, #e7e2f7, #eef5e2); }
 .previewButton .preview { min-width: 210px; }
+.summaryPreview {
+  display: grid;
+  width: 100%;
+  min-height: 246px;
+  align-content: start;
+  gap: 12px;
+  padding: 24px 22px;
+  border: 1px solid rgba(45, 45, 55, .1);
+  border-radius: 5px 5px 0 0;
+  background: #fff;
+  box-shadow: 0 12px 28px rgba(31, 31, 43, .13);
+  text-align: left;
+}
+.summaryPreview > span { width: 28px; height: 4px; border-radius: 9px; background: var(--brand); }
+.summaryPreview > strong { overflow: hidden; color: var(--ink); font-size: .76rem; text-overflow: ellipsis; white-space: nowrap; }
+.summaryPreview > i { display: block; height: 5px; border-radius: 9px; background: #e7e7ec; }
+.summaryPreview > i:nth-of-type(2) { width: 86%; }
+.summaryPreview > i:nth-of-type(3) { width: 68%; }
+.summaryPreview > b { display: block; height: 36px; border-top: 2px solid color-mix(in srgb, var(--brand) 45%, white); border-bottom: 1px solid #ececf0; }
+.summaryPreview[data-track="study"] > span { background: #557b65; }
+.loadMore { display: flex; justify-content: center; padding: 24px 0 4px; }
 .trackTag { position: absolute; top: 13px; left: 13px; display: flex; align-items: center; gap: 5px; padding: 6px 8px; border-radius: 99px; color: var(--ink); background: rgba(255,255,255,.88); font-size: .57rem; font-weight: 730; backdrop-filter: blur(8px); }
 .cardBody { position: relative; padding: 19px; }
 .cardTitle { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }

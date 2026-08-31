@@ -5,7 +5,7 @@
 .modeBadge { display: inline-flex; align-items: center; gap: 6px; padding: 7px 9px; margin-bottom: 15px; border-radius: 99px; color: var(--brand); background: var(--brand-soft); font-size: .64rem; font-weight: 740; }
 .adminHeader h1 { margin: 0; font-size: clamp(2.4rem, 4.4vw, 4rem); line-height: 1.05; letter-spacing: -.06em; }
 .adminHeader p { max-width: 720px; margin: 15px 0 0; color: var(--muted); line-height: 1.6; }
-.metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 42px 0 20px; }
+.metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 42px 0 20px; }
 .metrics article { display: grid; grid-template-columns: auto 1fr; gap: 13px; padding: 21px; border: 1px solid var(--border); border-radius: 16px; background: white; }
 .metrics article > span { display: grid; width: 40px; height: 40px; place-items: center; border-radius: 11px; color: var(--brand); background: var(--brand-soft); }
 .metrics article > div { display: grid; }
