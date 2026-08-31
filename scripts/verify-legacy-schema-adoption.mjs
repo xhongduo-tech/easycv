@@ -76,14 +76,20 @@ function createLegacyDb() {
 }
 
 function asD1(sqlite) {
+  let statementCount = 0;
   const makeStatement = (sql, values = []) => ({
     bind: (...nextValues) => makeStatement(sql, nextValues),
-    all: async () => ({ results: sqlite.prepare(sql).all(...values) }),
+    all: async () => {
+      statementCount += 1;
+      return { results: sqlite.prepare(sql).all(...values) };
+    },
     run: async () => {
+      statementCount += 1;
       const result = sqlite.prepare(sql).run(...values);
       return { success: true, meta: { changes: result.changes } };
     },
     execute: () => {
+      statementCount += 1;
       const prepared = sqlite.prepare(sql);
       if (/^\s*(SELECT|PRAGMA)/i.test(sql)) return { results: prepared.all(...values) };
       const result = prepared.run(...values);
@@ -103,6 +109,7 @@ function asD1(sqlite) {
         throw error;
       }
     },
+    getStatementCount: () => statementCount,
   };
 }
 
@@ -166,11 +173,16 @@ for (const prefixLength of [0, 2, 5]) {
     const names = LEGACY_MIGRATIONS.slice(0, prefixLength);
     db.prepare(buildLedgerInsertSql(names.length)).run(...names);
   }
-  const result = await adoptLegacyD1(asD1(db));
+  const d1 = asD1(db);
+  const result = await adoptLegacyD1(d1);
   assert.equal(result.state, prefixLength === 5 ? "already_baselined" : "adopted");
   assert.deepEqual(
     db.prepare("SELECT name FROM d1_migrations ORDER BY id").all().map((row) => row.name),
     LEGACY_MIGRATIONS,
+  );
+  assert.ok(
+    d1.getStatementCount() <= 49,
+    `prefix ${prefixLength} adoption used ${d1.getStatementCount()} D1 statements; expected < 50`,
   );
 }
 

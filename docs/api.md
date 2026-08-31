@@ -23,7 +23,7 @@
 - `POST /api/auth/claim-guest`：正式登录后认领当前浏览器访客草稿；访客 Cookie 只从服务端读取，不能在请求正文中指定其他访客。
 - `GET /api/legal/acceptance`、`POST /api/legal/acceptance`：读取或幂等确认当前协议版本；应用数据访问要求当前版本已确认。
 - `ALL /api/auth/two-factor/*`：TOTP 与一次性恢复码。启用双重验证后，OAuth、短信和密码登录得到的每个新会话都必须完成 step-up 才能访问应用数据。
-- `POST /api/account/export`：要求同源、非模拟登录、当前 MFA assurance 及一小时内的新会话，返回不含密码、token、TOTP 密钥和建议正文副本的账号 JSON 数据包。
+- `POST /api/account/export`：要求同源、非模拟登录、当前 MFA assurance 及一小时内的新会话，返回不含密码、token、TOTP 密钥和建议正文副本的账号 JSON 数据包。同步导出先执行体量预检（最多 20,000 条记录、10 MiB 主要正文）；超限返回 `413 PAYLOAD_TOO_LARGE`，不会静默截断，需清理不再需要的简历或转入人工/异步导出流程。
 
 邮箱密码至少 12 位且同时包含字母和数字。邮箱验证、密码重置链接有效期为 1 小时；中国大陆手机号统一保存为 `+86` E.164 格式，验证码为 6 位、5 分钟有效、最多尝试 3 次。认证敏感端点使用 D1 持久化限流，验证标识散列存储，OAuth token 加密存储。
 
@@ -128,7 +128,7 @@
 ## 数据保留维护
 
 - `POST /api/maintenance/retention`：使用 `Authorization: Bearer <MAINTENANCE_SECRET>` 调用并始终执行一批有界维护：返还安全可恢复的过期 pending 额度、擦除过期建议正文、删除超过 90 天的幂等 tombstone 与模型成本明细、到期的防滥用摘要、超期访客数据和旧版本。调度器应重复调用直至 due 指标归零。账务记录不会在账号删除时直接丢失，而会先去标识化。
-- `POST /api/maintenance/reconcile`：相同鉴权和 dry-run / `?apply=true` 语义；报告 stale attempt、额度流水/成本不一致、delivery 缺失与 lot 漂移，并仅在取得 owner lease 后恢复有确定结论的悬挂请求。
+- `POST /api/maintenance/reconcile`：相同鉴权和 dry-run / `?apply=true` 语义；报告 stale attempt、额度流水/成本不一致、delivery 缺失、lot 漂移，以及“额度或模型运行已结算但 delivery 仍 pending”的总数与最多 4 条脱敏定位样本；仅在取得 owner lease 后恢复有确定结论的悬挂请求。
 
 生产环境至少每天执行一次预览与应用，并对非 2xx、持续 pending、ledger/run mismatch 或 lot drift 告警。数据库恢复步骤见 `docs/database-operations.md`。
 

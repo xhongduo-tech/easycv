@@ -50,7 +50,7 @@ POST /api/maintenance/reconcile
 Authorization: Bearer <MAINTENANCE_SECRET>
 ```
 
-`retention` 每次调用都会直接执行一个有明确上限的维护批次；调度器应重复调用直至 due 指标归零，而不是扩大单次事务。`reconcile` 默认 dry-run，仅在人工或调度策略确认后使用 `?apply=true`。维护密钥必须至少 32 位、独立轮换，不能与认证或促销密钥共用。
+`retention` 每次调用都会直接执行一个有明确上限的维护批次；调度器应重复调用直至 due 指标归零，而不是扩大单次事务。`reconcile` 默认 dry-run，仅在人工或调度策略确认后使用 `?apply=true`；`settledPendingDeliveries.total` 非零表示结算状态与交付状态发生冲突，应立即告警并人工核查，不能由通用 stale 恢复路径覆盖。维护密钥必须至少 32 位、独立轮换，不能与认证或促销密钥共用。
 
 长期 SQL 归档示例：
 

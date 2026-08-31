@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -6,6 +7,8 @@ import {
   approvedTargetBrandAssets,
   getApprovedTargetBrandAsset,
   getTargetBrandPresentation,
+  isTargetBrandAssetCurrent,
+  type TargetBrandAsset,
 } from "@/lib/target-brand-assets";
 
 describe("target brand asset gate", () => {
@@ -32,6 +35,23 @@ describe("target brand asset gate", () => {
     });
   });
 
+  it("keeps an approval through its expiry date and rejects it afterward", () => {
+    const expiringAsset: TargetBrandAsset = {
+      src: "/brands/targets/example.svg",
+      kind: "mark",
+      sourceUrl: "https://example.com/brand",
+      termsUrl: "https://example.com/brand/terms",
+      allowedUse: "Synthetic fixture for expiry policy testing only.",
+      reviewedAt: "2026-08-01",
+      expiresAt: "2026-09-01",
+      assetHash: `sha256-${"0".repeat(64)}`,
+      rightsBasis: "written-permission",
+    };
+
+    expect(isTargetBrandAssetCurrent(expiringAsset, new Date("2026-09-01T23:59:59.999Z"))).toBe(true);
+    expect(isTargetBrandAssetCurrent(expiringAsset, new Date("2026-09-02T00:00:00.000Z"))).toBe(false);
+  });
+
   it("only admits local, documented and safe assets", () => {
     const careerIds = new Set(targetProfiles.filter((target) => target.track === "career").map((target) => target.id));
 
@@ -48,9 +68,11 @@ describe("target brand asset gate", () => {
 
       const filePath = join(process.cwd(), "public", asset.src.slice(1));
       expect(existsSync(filePath)).toBe(true);
+      const contents = readFileSync(filePath);
+      expect(`sha256-${createHash("sha256").update(contents).digest("hex")}`).toBe(asset.assetHash);
 
       if (asset.src.endsWith(".svg")) {
-        const svg = readFileSync(filePath, "utf8");
+        const svg = new TextDecoder().decode(contents);
         expect(svg).toMatch(/<svg\b/i);
         expect(svg).toMatch(/viewBox=/i);
         expect(svg).not.toMatch(/<script|foreignObject|\son\w+=|https?:\/\//i);

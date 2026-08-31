@@ -19,8 +19,17 @@ export interface TargetBrandAsset {
  */
 export const approvedTargetBrandAssets: Readonly<Record<string, TargetBrandAsset>> = Object.freeze({});
 
-export function getApprovedTargetBrandAsset(targetId: string | undefined): TargetBrandAsset | undefined {
-  return targetId ? approvedTargetBrandAssets[targetId] : undefined;
+export function isTargetBrandAssetCurrent(asset: TargetBrandAsset, now = new Date()): boolean {
+  if (!asset.expiresAt) return true;
+  return asset.expiresAt >= now.toISOString().slice(0, 10);
+}
+
+export function getApprovedTargetBrandAsset(
+  targetId: string | undefined,
+  now = new Date(),
+): TargetBrandAsset | undefined {
+  const asset = targetId ? approvedTargetBrandAssets[targetId] : undefined;
+  return asset && isTargetBrandAssetCurrent(asset, now) ? asset : undefined;
 }
 
 const tones: TargetBrandTone[] = ["violet", "slate", "blue", "mint", "amber", "rose"];

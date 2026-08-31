@@ -5,6 +5,7 @@ import { LegalAcceptanceRequiredError } from "@/lib/legal-acceptance";
 import { ResumeLimitError } from "@/lib/resume-policy";
 import { MfaVerificationRequiredError } from "@/lib/session-assurance";
 import { AiCreditSettlementUncertainError } from "@/lib/credits";
+import { AccountExportTooLargeError } from "@/lib/account-export";
 import { logOperationalEvent } from "@/lib/operational-log";
 import { formatValidationIssues } from "@/lib/validation";
 
@@ -86,6 +87,13 @@ export function rejectCrossOrigin(request: Request) {
 }
 
 export function withApiError(error: unknown) {
+  if (error instanceof AccountExportTooLargeError) {
+    return apiError(
+      413,
+      "PAYLOAD_TOO_LARGE",
+      "账户数据量较大，暂时无法同步导出；请删除不再需要的简历后重试，或联系支持协助导出",
+    );
+  }
   if (error instanceof SessionRateLimitError) {
     return apiError(429, "RATE_LIMITED", "新建访客空间过于频繁，请稍后再试");
   }

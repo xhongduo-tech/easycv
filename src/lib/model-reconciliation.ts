@@ -16,7 +16,7 @@ const MAX_RECOVERIES_PER_INVOCATION = 4;
 export async function inspectModelReconciliation(db: Database, now = new Date()) {
   const staleBefore = new Date(now.getTime() - STALE_ATTEMPT_MS).toISOString();
   const retainedAfter = new Date(now.getTime() - MODEL_RECORD_RETENTION_MS).toISOString();
-  const [stale, mismatches, missingDeliveries, lotDrift] = await Promise.all([
+  const [stale, mismatches, missingDeliveries, lotDrift, settledPendingDeliveries] = await Promise.all([
     db.prepare(`SELECT request_id, user_id, attempt_state FROM model_advice_deliveries
       WHERE attempt_state IN ('prepared','provider_started','settlement_pending')
         AND updated_at <= ?
@@ -57,12 +57,40 @@ export async function inspectModelReconciliation(db: Database, now = new Date())
           WHERE ledger.lot_id = lot.id AND ledger.status IN ('reserved','consumed')
         ), 0)`)
       .first<{ total: number }>(),
+    db.prepare(`SELECT delivery.request_id, delivery.user_id, delivery.attempt_state,
+        ledger.status AS ledger_status, run.status AS run_status,
+        COUNT(*) OVER () AS total
+      FROM model_advice_deliveries delivery
+      LEFT JOIN ai_credit_ledger ledger ON ledger.request_id = delivery.request_id
+      LEFT JOIN model_run_costs run ON run.request_id = delivery.request_id
+      WHERE delivery.attempt_state IN ('prepared','provider_started','settlement_pending')
+        AND (ledger.status = 'consumed' OR run.status = 'succeeded')
+      ORDER BY delivery.updated_at, delivery.request_id
+      LIMIT 4`)
+      .all<{
+        request_id: string;
+        user_id: string;
+        attempt_state: string;
+        ledger_status: string | null;
+        run_status: string | null;
+        total: number;
+      }>(),
   ]);
   return {
     staleAttempts: stale.results,
     ledgerRunMismatches: Number(mismatches?.total ?? 0),
     missingDeliveries: Number(missingDeliveries?.total ?? 0),
     lotDrift: Number(lotDrift?.total ?? 0),
+    settledPendingDeliveries: {
+      total: Number(settledPendingDeliveries.results[0]?.total ?? 0),
+      samples: settledPendingDeliveries.results.map((row) => ({
+        request_id: row.request_id,
+        user_id: row.user_id,
+        attempt_state: row.attempt_state,
+        ledger_status: row.ledger_status,
+        run_status: row.run_status,
+      })),
+    },
   };
 }
 

@@ -3,11 +3,38 @@ import { resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 import type { getDatabase } from "@/../db";
-import { buildAccountExport } from "@/lib/account-export";
+import {
+  ACCOUNT_EXPORT_MAX_CONTENT_BYTES,
+  ACCOUNT_EXPORT_MAX_RECORDS,
+  AccountExportTooLargeError,
+  assertAccountExportEstimate,
+  buildAccountExport,
+} from "@/lib/account-export";
 
 type Database = ReturnType<typeof getDatabase>;
 
 describe("account data export", () => {
+  it("accepts an export estimate at the configured limits", () => {
+    expect(() => assertAccountExportEstimate({
+      recordCount: ACCOUNT_EXPORT_MAX_RECORDS,
+      contentBytes: ACCOUNT_EXPORT_MAX_CONTENT_BYTES,
+    })).not.toThrow();
+  });
+
+  it("rejects an export estimate above the record limit", () => {
+    expect(() => assertAccountExportEstimate({
+      recordCount: ACCOUNT_EXPORT_MAX_RECORDS + 1,
+      contentBytes: 0,
+    })).toThrow(AccountExportTooLargeError);
+  });
+
+  it("rejects an export estimate above the content-byte limit", () => {
+    expect(() => assertAccountExportEstimate({
+      recordCount: 1,
+      contentBytes: ACCOUNT_EXPORT_MAX_CONTENT_BYTES + 1,
+    })).toThrow(AccountExportTooLargeError);
+  });
+
   it("exports user-owned records without authentication or replay secrets", async () => {
     const adapter = createDatabase();
     const now = "2026-09-01T00:00:00.000Z";
