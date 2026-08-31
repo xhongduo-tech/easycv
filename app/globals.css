@@ -259,10 +259,10 @@ svg {
 }
 
 .header-inner {
-  display: grid;
+  display: flex;
   height: 100%;
-  grid-template-columns: 1fr auto 1fr;
   align-items: center;
+  justify-content: space-between;
 }
 
 .desktop-nav {
@@ -961,7 +961,10 @@ svg {
   }
 
   .header-dashboard {
-    display: none;
+    display: inline-flex;
+    min-height: 42px;
+    padding-inline: 10px;
+    font-size: 0.78rem;
   }
 
   .header-actions > .button-primary {
@@ -988,6 +991,16 @@ svg {
   .footer-simple { grid-template-columns: 1fr; gap: 25px; }
   .footer-simple > div { align-items: flex-start; flex-direction: column; gap: 13px; }
   .footer-simple nav { flex-wrap: wrap; gap: 14px 20px; }
+}
+
+@media (max-width: 380px) {
+  .site-header .brand-word {
+    display: none;
+  }
+
+  .header-dashboard svg {
+    display: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
