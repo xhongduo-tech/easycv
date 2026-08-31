@@ -55,9 +55,13 @@ export async function deleteApplicationData(
       db.prepare(`UPDATE signup_promo_redemptions
         SET granted_user_id = 'deleted-promo-' || lower(hex(randomblob(16)))
         WHERE granted_user_id = ?`).bind(userId),
-      db.prepare(`UPDATE model_run_costs
-        SET user_id = 'deleted-run-' || lower(hex(randomblob(16))), credit_ledger_id = NULL
-        WHERE user_id = ?`).bind(userId),
+      db.prepare(`UPDATE model_run_costs SET
+          user_id = 'deleted-run-' || lower(hex(randomblob(16))),
+          credit_ledger_id = NULL,
+          status = CASE WHEN status = 'running' THEN 'failed' ELSE status END,
+          failure_kind = CASE WHEN status = 'running' THEN 'account-deleted' ELSE failure_kind END,
+          settled_at = CASE WHEN status = 'running' THEN ? ELSE settled_at END
+        WHERE user_id = ?`).bind(now, userId),
       db.prepare("DELETE FROM credit_orders WHERE user_id = ? AND status <> 'paid'").bind(userId),
       db.prepare(`UPDATE credit_orders
         SET user_id = 'deleted-order-' || lower(hex(randomblob(16)))

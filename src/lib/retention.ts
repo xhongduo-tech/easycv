@@ -108,8 +108,13 @@ export async function runRetentionMaintenance(
       .bind(guestBefore, nowIso),
     db.prepare(`DELETE FROM model_advice_deliveries WHERE user_id IN (${expiredGuestSelector})`)
       .bind(guestBefore, nowIso),
-    db.prepare(`UPDATE model_run_costs SET user_id = 'expired-guest-' || request_id, credit_ledger_id = NULL
-      WHERE user_id IN (${expiredGuestSelector})`).bind(guestBefore, nowIso),
+    db.prepare(`UPDATE model_run_costs SET
+        user_id = 'expired-guest-' || request_id,
+        credit_ledger_id = NULL,
+        status = CASE WHEN status = 'running' THEN 'failed' ELSE status END,
+        failure_kind = CASE WHEN status = 'running' THEN 'guest-expired' ELSE failure_kind END,
+        settled_at = CASE WHEN status = 'running' THEN ?3 ELSE settled_at END
+      WHERE user_id IN (${expiredGuestSelector})`).bind(guestBefore, nowIso, nowIso),
     db.prepare(`DELETE FROM ai_credit_ledger WHERE user_id IN (${expiredGuestSelector})`)
       .bind(guestBefore, nowIso),
     db.prepare(`DELETE FROM ai_credit_lots WHERE user_id IN (${expiredGuestSelector})`)

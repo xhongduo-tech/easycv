@@ -33,6 +33,12 @@ describe("atomic account deletion", () => {
     expect(adapter.sqlite.prepare("SELECT id FROM ai_credit_lots WHERE user_id = 'user-1'").get()).toBeUndefined();
     expect(adapter.sqlite.prepare("SELECT user_id, credit_ledger_id FROM model_run_costs WHERE request_id = 'request-1'").get())
       .toMatchObject({ credit_ledger_id: null });
+    expect(adapter.sqlite.prepare(`SELECT status, failure_kind, settled_at
+      FROM model_run_costs WHERE request_id = 'request-1'`).get()).toMatchObject({
+      status: "failed",
+      failure_kind: "account-deleted",
+      settled_at: expect.any(String),
+    });
     const runOwners = adapter.sqlite.prepare("SELECT user_id FROM model_run_costs ORDER BY request_id").all() as Array<{ user_id: string }>;
     const orderOwner = adapter.sqlite.prepare("SELECT user_id FROM credit_orders WHERE id = 'order-paid'").get() as { user_id: string };
     expect(runOwners.every((row) => row.user_id.startsWith("deleted-run-"))).toBe(true);
@@ -84,8 +90,12 @@ function seed(sqlite: DatabaseSync) {
     (id, user_id, source, reference_id, initial_credits, remaining_credits, created_at)
     VALUES ('lot-1', 'user-1', 'signup', 'launch-signup-v1', 5, 5, '2026-09-01T00:00:00.000Z')`).run();
   sqlite.prepare("INSERT INTO ai_credit_ledger VALUES ('ledger-1', 'user-1')").run();
-  sqlite.prepare("INSERT INTO model_run_costs VALUES ('request-1', 'user-1', 'ledger-1')").run();
-  sqlite.prepare("INSERT INTO model_run_costs VALUES ('request-2', 'user-1', NULL)").run();
+  sqlite.prepare(`INSERT INTO model_run_costs
+    (request_id, user_id, credit_ledger_id, status)
+    VALUES ('request-1', 'user-1', 'ledger-1', 'running')`).run();
+  sqlite.prepare(`INSERT INTO model_run_costs
+    (request_id, user_id, credit_ledger_id, status)
+    VALUES ('request-2', 'user-1', NULL, 'failed')`).run();
   sqlite.prepare("INSERT INTO credit_orders VALUES ('order-paid', 'user-1', 'paid')").run();
   sqlite.prepare(`INSERT INTO signup_promo_redemptions
     VALUES (?, 'user-1', 'launch-signup-v1', '2026-09-01T00:00:00.000Z', '2028-09-01T00:00:00.000Z')`)
@@ -136,7 +146,14 @@ function createDatabase(failBatchAt?: number) {
       created_at TEXT NOT NULL,
       retained_until TEXT NOT NULL
     );
-    CREATE TABLE model_run_costs (request_id TEXT PRIMARY KEY, user_id TEXT, credit_ledger_id TEXT);
+    CREATE TABLE model_run_costs (
+      request_id TEXT PRIMARY KEY,
+      user_id TEXT,
+      credit_ledger_id TEXT,
+      status TEXT NOT NULL,
+      failure_kind TEXT,
+      settled_at TEXT
+    );
     CREATE TABLE credit_orders (id TEXT PRIMARY KEY, user_id TEXT, status TEXT);
     CREATE TABLE advice_usage_events (id TEXT PRIMARY KEY, user_id TEXT);
     CREATE TABLE model_usage_events (id TEXT PRIMARY KEY, user_id TEXT);

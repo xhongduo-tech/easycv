@@ -76,6 +76,10 @@ describe("retention maintenance", () => {
       INSERT INTO guest_sessions (token_hash, user_id, expires_at, created_at) VALUES
         ('active-token', 'guest-active', '2026-09-02T00:00:00.000Z', '2026-08-01T00:00:00.000Z'),
         ('expired-token', 'guest-expired', '2026-08-20T00:00:00.000Z', '2026-08-01T00:00:00.000Z');
+      INSERT INTO model_run_costs
+        (request_id, user_id, model, status, price_version, created_at)
+        VALUES ('guest-running-cost', 'guest-expired', 'deepseek-v4-flash', 'running', 'v1',
+          '2026-08-20T00:00:00.000Z');
     `);
 
     const result = await runRetentionMaintenance(db, { apply: true, now: NOW });
@@ -84,6 +88,13 @@ describe("retention maintenance", () => {
       .toEqual({ id: "guest-active" });
     expect(adapter.sqlite.prepare("SELECT id FROM users WHERE id = 'guest-expired'").get())
       .toBeUndefined();
+    expect(adapter.sqlite.prepare(`SELECT user_id, status, failure_kind, settled_at
+      FROM model_run_costs WHERE request_id = 'guest-running-cost'`).get()).toMatchObject({
+      user_id: "expired-guest-guest-running-cost",
+      status: "failed",
+      failure_kind: "guest-expired",
+      settled_at: NOW.toISOString(),
+    });
   });
 
   it("never purges an expired guest while a model owner lease is active", async () => {
