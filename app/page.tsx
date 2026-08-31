@@ -7,7 +7,7 @@ import styles from "./home.module.css";
 export default function HomePage() {
   return (
     <main className={styles.home}>
-      <SiteHeader />
+      <SiteHeader minimal />
 
       <section className={styles.hero}>
         <div className={`shell ${styles.heroGrid}`}>
@@ -23,9 +23,6 @@ export default function HomePage() {
               </Link>
               <Link className="button button-ghost" href="/dashboard">
                 我的简历 <ArrowRight size={17} />
-              </Link>
-              <Link className="button button-ghost" href="/pricing">
-                查看定价 <ArrowRight size={17} />
               </Link>
             </div>
             <div className={styles.promiseLine}>
