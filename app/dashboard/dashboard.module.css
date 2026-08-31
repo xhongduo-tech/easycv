@@ -177,7 +177,7 @@
 
 .targetOptions { display: grid; max-height: 244px; grid-template-columns: 1fr 1fr; gap: 7px; overflow-y: auto; padding: 2px; }
 .targetOptions > button { display: grid; min-height: 62px; grid-template-columns: auto 1fr auto; align-items: center; gap: 9px; padding: 10px; cursor: pointer; border: 1px solid var(--border); border-radius: 10px; background: white; text-align: left; }
-.targetOptions > button > span { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 9px; color: var(--brand); background: var(--brand-soft); }
+.targetOptions .targetBrand { width: 34px; height: 34px; }
 .targetOptions > button > div { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
 .targetOptions strong { overflow: hidden; font-size: .68rem; text-overflow: ellipsis; white-space: nowrap; }
 .targetOptions small { overflow: hidden; color: var(--muted); font-size: .54rem; text-overflow: ellipsis; white-space: nowrap; }
@@ -185,6 +185,18 @@
 .targetOptions .targetActive > svg { color: var(--brand); }
 .targetLoading { display: flex; min-height: 100px; align-items: center; justify-content: center; gap: 8px; color: var(--muted); font-size: .68rem; }
 .targetLoading svg { animation: spin .9s linear infinite; }
+
+.brandNotice {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 10px 2px 0;
+  color: var(--muted);
+  font-size: .55rem;
+  line-height: 1.55;
+}
+
+.brandNotice svg { flex: none; margin-top: 1px; color: var(--success); }
 
 .customTarget { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 10px; margin-top: 10px; }
 .customTarget > span { color: var(--muted); font-size: .61rem; font-weight: 700; }

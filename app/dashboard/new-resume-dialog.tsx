@@ -4,16 +4,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   BriefcaseBusiness,
-  Building2,
   Check,
   GraduationCap,
   LayoutTemplate,
   LoaderCircle,
   Search,
+  ShieldCheck,
   Sparkles,
   X,
 } from "lucide-react";
 import { ResumePreview } from "@/components/resume-preview";
+import { TargetBrandMark } from "@/components/target-brand-mark";
 import { createBlankContent, createStarterContent } from "@/lib/sample-data";
 import { recommendedCareerTemplateIdsForRole, recommendedTemplateIdsFor } from "@/lib/target-catalog";
 import type { ResumeTemplate, TargetProfile, Track } from "@/types/resume";
@@ -235,8 +236,14 @@ export function NewResumeDialog({
                     setSelectedTemplate(nextId ?? templates[0]?.id ?? "");
                     setTemplateTouched(false);
                     setError("");
-                  }}><span>{track === "study" ? <GraduationCap size={16} /> : <Building2 size={16} />}</span><div><strong>{item.name}</strong><small>{item.region} · {item.category}</small></div>{selectedTarget === item.id && <Check size={15} />}</button>)}
+                  }}><TargetBrandMark className={styles.targetBrand} targetId={item.id} targetName={item.name} track={track} /><div><strong>{item.name}</strong><small>{item.region} · {item.category}</small></div>{selectedTarget === item.id && <Check size={15} />}</button>)}
                 </div>
+              )}
+              {track === "career" && (
+                <p className={styles.brandNotice}>
+                  <ShieldCheck size={15} />
+                  <span>企业名称及经权利审查后展示的标识仅用于目标识别，不表示合作或背书；未获明确许可时使用中性字标。</span>
+                </p>
               )}
               <label className={styles.customTarget}><span>没有找到？</span><input disabled={creating} value={customTarget} onChange={(event) => {
                 setCustomTarget(event.target.value);

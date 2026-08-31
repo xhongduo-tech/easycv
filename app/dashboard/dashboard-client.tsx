@@ -19,12 +19,12 @@ import {
   RefreshCw,
   Search,
   ShieldCheck,
-  Target,
   Trash2,
 } from "lucide-react";
 import { ResumePreview } from "@/components/resume-preview";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { TargetBrandMark } from "@/components/target-brand-mark";
 import { formatDate } from "@/lib/utils";
 import { authClient } from "@/lib/auth-client";
 import type { ResumeRecord, ResumeTemplate, Track } from "@/types/resume";
@@ -214,7 +214,7 @@ export function DashboardClient({ initialCreate = false, initialTrack }: { initi
                       <span className={styles.trackTag}>{resume.track === "study" ? <GraduationCap size={12} /> : <Building2 size={12} />}{resume.track === "study" ? "留学申请" : "毕业求职"}</span>
                     </button>
                     <div className={styles.cardBody}>
-                      <div className={styles.cardTitle}><div><h3>{resume.title}</h3><span><Target size={12} /> {resume.targetName}</span></div><details><summary aria-label="更多操作"><MoreHorizontal size={18} /></summary><div><button type="button" onClick={() => void rename(resume)}><Pencil size={14} /> 重命名</button><button type="button" onClick={() => void duplicate(resume)}><Copy size={14} /> 创建副本</button><button type="button" className={styles.deleteAction} onClick={() => void remove(resume)}><Trash2 size={14} /> 删除草稿</button></div></details></div>
+                      <div className={styles.cardTitle}><div><h3>{resume.title}</h3><span><TargetBrandMark size="small" targetId={resume.targetProfileId} targetName={resume.targetName} track={resume.track} /> {resume.targetName}</span></div><details><summary aria-label="更多操作"><MoreHorizontal size={18} /></summary><div><button type="button" onClick={() => void rename(resume)}><Pencil size={14} /> 重命名</button><button type="button" onClick={() => void duplicate(resume)}><Copy size={14} /> 创建副本</button><button type="button" className={styles.deleteAction} onClick={() => void remove(resume)}><Trash2 size={14} /> 删除草稿</button></div></details></div>
                       <div className={styles.cardMeta}><span><Clock3 size={12} /> {formatDate(resume.updatedAt)}</span><span>修订 {resume.revision}</span></div>
                       <div className={styles.progressRow}><i><span style={{ width: `${resume.progress}%` }} /></i><strong>{resume.progress}%</strong></div>
                       <Link href={`/builder/${resume.id}`}>继续编辑 <ArrowRight size={15} /></Link>

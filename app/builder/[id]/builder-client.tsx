@@ -44,6 +44,7 @@ import {
 import { Brand } from "@/components/brand";
 import { AccountMenu } from "@/components/account-menu";
 import { ResumePreview } from "@/components/resume-preview";
+import { TargetBrandMark } from "@/components/target-brand-mark";
 import { recommendGrowthGaps } from "@/lib/growth-data";
 import { analyzeJobFit, extractRequirements, targetBriefSourceLabels } from "@/lib/job-fit";
 import {
@@ -557,7 +558,7 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
             <button ref={sidebarCloseRef} type="button" onClick={() => setSidebarOpen(false)} aria-label="关闭章节导航"><X size={17} /></button>
           </div>
           <div className={styles.targetBadge}>
-            <Target size={17} />
+            <TargetBrandMark targetId={resume.targetProfileId} targetName={resume.targetName} track={resume.track} />
             <div><span>当前目标</span><strong>{resume.targetName}{resume.targetBrief?.focusName ? ` · ${resume.targetBrief.focusName}` : ""}</strong></div>
           </div>
           {template && (

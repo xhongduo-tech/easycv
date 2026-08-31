@@ -1,0 +1,56 @@
+.mark {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  overflow: hidden;
+  place-items: center;
+  border: 1px solid rgba(23, 24, 34, .08);
+  border-radius: 9px;
+  background: #f4f3f0;
+  color: #424653;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .78);
+}
+
+.small {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+}
+
+.large {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+}
+
+.mark[data-tone="violet"] { color: #49388d; background: #eeeafd; }
+.mark[data-tone="slate"] { color: #3f4654; background: #edf0f3; }
+.mark[data-tone="blue"] { color: #315b7a; background: #e8f2f8; }
+.mark[data-tone="mint"] { color: #2f6658; background: #e7f5ef; }
+.mark[data-tone="amber"] { color: #775526; background: #faf0d9; }
+.mark[data-tone="rose"] { color: #7c4353; background: #f8e9ed; }
+
+.monogram {
+  padding: 0 3px;
+  font-size: .55rem;
+  font-weight: 820;
+  letter-spacing: -.025em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.small .monogram { font-size: .43rem; }
+.large .monogram { font-size: .59rem; }
+
+.mark img {
+  display: block;
+  width: 76%;
+  height: 76%;
+  object-fit: contain;
+}
+
+.study {
+  color: var(--brand);
+  background: var(--brand-soft);
+}
