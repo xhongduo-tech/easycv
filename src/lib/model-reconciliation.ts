@@ -1,5 +1,8 @@
 import type { getDatabase } from "@/../db";
-import { recoverAbandonedModelAttempt } from "@/lib/model-attempt-recovery";
+import {
+  ModelAttemptInconsistentError,
+  recoverAbandonedModelAttempt,
+} from "@/lib/model-attempt-recovery";
 import { acquireOwnerLease, releaseOwnerLease } from "@/lib/owner-lease";
 
 type Database = ReturnType<typeof getDatabase>;
@@ -20,6 +23,12 @@ export async function inspectModelReconciliation(db: Database, now = new Date())
         AND NOT EXISTS (SELECT 1 FROM model_session_leases
           WHERE model_session_leases.owner_key = model_advice_deliveries.user_id
             AND model_session_leases.expires_at > ?)
+        AND NOT EXISTS (SELECT 1 FROM ai_credit_ledger
+          WHERE ai_credit_ledger.request_id = model_advice_deliveries.request_id
+            AND ai_credit_ledger.status = 'consumed')
+        AND NOT EXISTS (SELECT 1 FROM model_run_costs
+          WHERE model_run_costs.request_id = model_advice_deliveries.request_id
+            AND model_run_costs.status = 'succeeded')
       ORDER BY updated_at LIMIT ${MAX_RECOVERIES_PER_INVOCATION}`).bind(staleBefore, now.toISOString()).all<{
         request_id: string;
         user_id: string;
@@ -66,6 +75,7 @@ export async function runModelReconciliation(
   const staleBefore = new Date(now.getTime() - STALE_ATTEMPT_MS).toISOString();
   const before = await inspectModelReconciliation(db, now);
   let recovered = 0;
+  let inconsistentSkipped = 0;
   if (options.apply) {
     for (const attempt of before.staleAttempts) {
       const leaseAttempt = await acquireOwnerLease(
@@ -80,12 +90,26 @@ export async function runModelReconciliation(
         const current = await db.prepare(`SELECT attempt_state FROM model_advice_deliveries
           WHERE request_id = ? AND user_id = ?
             AND attempt_state IN ('prepared','provider_started','settlement_pending')
-            AND updated_at <= ?`)
+            AND updated_at <= ?
+            AND NOT EXISTS (SELECT 1 FROM ai_credit_ledger
+              WHERE ai_credit_ledger.request_id = model_advice_deliveries.request_id
+                AND ai_credit_ledger.status = 'consumed')
+            AND NOT EXISTS (SELECT 1 FROM model_run_costs
+              WHERE model_run_costs.request_id = model_advice_deliveries.request_id
+                AND model_run_costs.status = 'succeeded')`)
           .bind(attempt.request_id, attempt.user_id, staleBefore)
           .first<{ attempt_state: string }>();
         if (!current) continue;
 
-        await recoverAbandonedModelAttempt(db, attempt.request_id, attempt.user_id);
+        try {
+          await recoverAbandonedModelAttempt(db, attempt.request_id, attempt.user_id);
+        } catch (error) {
+          if (error instanceof ModelAttemptInconsistentError) {
+            inconsistentSkipped += 1;
+            continue;
+          }
+          throw error;
+        }
         const expired = await db.prepare(`UPDATE model_advice_deliveries
           SET response_json = '{}', attempt_state = 'expired', updated_at = ?, terminal_at = ?
           WHERE request_id = ? AND user_id = ? AND attempt_state = 'abandoned'
@@ -111,5 +135,5 @@ export async function runModelReconciliation(
       }
     }
   }
-  return { dryRun: !options.apply, recovered, ...before };
+  return { dryRun: !options.apply, recovered, inconsistentSkipped, ...before };
 }

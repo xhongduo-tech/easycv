@@ -26,6 +26,11 @@ describe("model reconciliation", () => {
       VALUES ('normal-cost', 'user-1', 'succeeded', '2026-08-31T00:00:00.000Z')`).run();
     const staleInsert = adapter.sqlite.prepare(`INSERT INTO model_advice_deliveries
       (request_id, user_id, attempt_state, updated_at) VALUES (?, 'user-1', 'prepared', '2026-08-31T00:00:00.000Z')`);
+    staleInsert.run("00-inconsistent-stale");
+    adapter.sqlite.prepare(`INSERT INTO ai_credit_ledger VALUES
+      ('00-inconsistent-stale', 'lot-1', 1, 'consumed', '2026-08-31T00:00:00.000Z')`).run();
+    adapter.sqlite.prepare(`INSERT INTO model_run_costs VALUES
+      ('00-inconsistent-stale', 'user-1', 'succeeded', '2026-08-31T00:00:00.000Z')`).run();
     for (let index = 0; index < 10; index += 1) staleInsert.run(`stale-${index}`);
 
     const result = await inspectModelReconciliation(
@@ -34,6 +39,8 @@ describe("model reconciliation", () => {
     );
 
     expect(result.staleAttempts).toHaveLength(4);
+    expect(result.staleAttempts.map((attempt) => attempt.request_id))
+      .not.toContain("00-inconsistent-stale");
     // One recent consumed ledger lacks a cost; one released ledger has a
     // succeeded cost. The old missing cost is beyond the 90-day window.
     expect(result.ledgerRunMismatches).toBe(2);

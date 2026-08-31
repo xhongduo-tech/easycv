@@ -32,8 +32,10 @@ async function handle(request: Request) {
     }) | undefined;
     if (
       authAction === "two-factor/enable"
-      && currentUser?.email
-      && isConfiguredAdminEmail(currentUser.email)
+      && (
+        currentUser?.role === "admin"
+        || (currentUser?.email && isConfiguredAdminEmail(currentUser.email))
+      )
       && !currentUser.twoFactorEnabled
     ) {
       const createdAt = currentSession ? new Date(currentSession.createdAt).getTime() : Number.NaN;
