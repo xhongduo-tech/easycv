@@ -349,6 +349,7 @@ export const targetProfiles: TargetProfile[] = [
 
 export function recommendedTemplateIdsFor(
   target: Pick<TargetProfile, "track" | "region" | "category">,
+  focusName = "",
 ) {
   if (target.track === "study") {
     if (target.region === "中国香港" || target.region === "新加坡") return ["harbour", "meridian", "camber"];
@@ -360,10 +361,36 @@ export function recommendedTemplateIdsFor(
     return ["atlas", "camber", "northstar"];
   }
 
+  const roleRecommendations = recommendedCareerTemplateIdsForRole(focusName);
+  if (roleRecommendations.length) return roleRecommendations;
   if (target.category === "央企国企") return ["statecraft", "pillar", "forge"];
   if (target.category === "金融与咨询") return ["sterling", "venture", "pillar"];
   if (target.category === "国际科技") return ["orbit", "forge", "summit"];
   if (target.category === "制造与新能源") return ["forge", "statecraft", "summit"];
   if (target.category === "快消与医药") return ["venture", "signal", "pillar"];
   return ["summit", "forge", "signal"];
+}
+
+export function recommendedCareerTemplateIdsForRole(focusName: string) {
+  const role = focusName.trim().toLowerCase();
+  if (!role) return [];
+  if (/(研发|开发|工程师|算法|架构|测试|运维|数据工程|software|developer|engineer|algorithm|sre)/i.test(role)) {
+    return ["forge", "orbit", "summit"];
+  }
+  if (/(投行|投资|证券|基金|研究员|审计|会计|咨询|战略|finance|bank|investment|consult|audit|analyst)/i.test(role)) {
+    return ["sterling", "venture", "pillar"];
+  }
+  if (/(产品|运营|增长|商业分析|数据分析|product|operation|growth|business analyst|data analyst)/i.test(role)) {
+    return ["summit", "orbit", "venture"];
+  }
+  if (/(市场|品牌|销售|商务|公关|marketing|brand|sales|business development|communications)/i.test(role)) {
+    return ["venture", "signal", "summit"];
+  }
+  if (/(制造|质量|工艺|供应链|机械|电气|土木|生产|manufactur|quality|supply chain|mechanical|electrical)/i.test(role)) {
+    return ["forge", "statecraft", "pillar"];
+  }
+  if (/(管培|职能|人力|行政|法务|公共事务|management trainee|human resources|legal)/i.test(role)) {
+    return ["pillar", "statecraft", "venture"];
+  }
+  return [];
 }

@@ -161,6 +161,19 @@ async function initializeDatabase() {
       created_at TEXT NOT NULL,
       UNIQUE(resume_id, revision)
     )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS resume_target_briefs (
+      resume_id TEXT PRIMARY KEY REFERENCES resumes(id),
+      user_id TEXT NOT NULL REFERENCES users(id),
+      kind TEXT NOT NULL,
+      focus_name TEXT NOT NULL,
+      requirements_text TEXT NOT NULL DEFAULT '',
+      source_type TEXT NOT NULL DEFAULT 'manual',
+      source_url TEXT,
+      captured_at TEXT NOT NULL,
+      revision INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS suggestion_events (
       id TEXT PRIMARY KEY,
       resume_id TEXT REFERENCES resumes(id),
@@ -227,6 +240,7 @@ async function initializeDatabase() {
     ),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_resumes_user_updated ON resumes(user_id, updated_at)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_resumes_user_status ON resumes(user_id, status)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_resume_target_briefs_user_updated ON resume_target_briefs(user_id, updated_at)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_guest_sessions_user ON guest_sessions(user_id)"),
     db.prepare(
       "CREATE INDEX IF NOT EXISTS idx_suggestion_events_resume ON suggestion_events(resume_id, created_at)",

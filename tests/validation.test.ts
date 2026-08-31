@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { exportQuerySchema, recommendationRequestSchema, updateResumeSchema } from "@/lib/validation";
+import { exportQuerySchema, putTargetBriefSchema, recommendationRequestSchema, updateResumeSchema } from "@/lib/validation";
 
 describe("resume update contract", () => {
   it("requires an expected revision", () => {
@@ -25,5 +25,25 @@ describe("recommendation contract", () => {
       resumeId: "d9428888-122b-4f48-9f9e-5ab869503e6d",
       section: "overview",
     }).success).toBe(true);
+  });
+});
+
+describe("target brief contract", () => {
+  const base = {
+    expectedRevision: 0,
+    focusName: "后端开发工程师",
+    requirementsText: "负责服务端系统设计，熟悉 TypeScript 与 SQL。",
+    sourceType: "employer-official" as const,
+  };
+
+  it("accepts only web source URLs", () => {
+    expect(putTargetBriefSchema.safeParse({ ...base, sourceUrl: "https://careers.example.com/job/1" }).success).toBe(true);
+    expect(putTargetBriefSchema.safeParse({ ...base, sourceUrl: "javascript:alert(1)" }).success).toBe(false);
+    expect(putTargetBriefSchema.safeParse({ ...base, sourceUrl: "file:///etc/passwd" }).success).toBe(false);
+  });
+
+  it("bounds job descriptions by characters and UTF-8 bytes", () => {
+    expect(putTargetBriefSchema.safeParse({ ...base, requirementsText: "岗".repeat(10_001) }).success).toBe(false);
+    expect(putTargetBriefSchema.safeParse({ ...base, requirementsText: "a".repeat(12_001) }).success).toBe(false);
   });
 });

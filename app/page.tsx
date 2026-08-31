@@ -30,7 +30,7 @@ export default function HomePage() {
             <p className="eyebrow">AI 简历助手</p>
             <h1>用 AI，<span>做好你的简历。</span></h1>
             <p className={styles.lead}>
-              告诉我们你的目标和真实经历，助手帮你梳理重点、优化表达并完成专业简历。留学申请或毕业求职，在创建时选择。
+              选择目标与岗位，提供真实经历和岗位要求。助手先建立证据地图，再帮你改写内容、套用专业版式，并输出 PDF 或个人网页。
             </p>
             <div className={styles.heroActions}>
               <Link className="button button-primary" href="/dashboard?new=1">
@@ -42,7 +42,8 @@ export default function HomePage() {
             </div>
             <div className={styles.trustLine}>
               <span><BadgeCheck size={16} /> AI 辅助写作</span>
-              <span><BadgeCheck size={16} /> 针对目标优化</span>
+              <span><BadgeCheck size={16} /> JD 证据映射</span>
+              <span><BadgeCheck size={16} /> 专业版式系统</span>
               <span><BadgeCheck size={16} /> 实时预览</span>
               <span><BadgeCheck size={16} /> PDF / 网页输出</span>
             </div>
@@ -77,13 +78,13 @@ export default function HomePage() {
           <div className={styles.coreGrid}>
             <article>
               <span><WandSparkles size={22} /></span>
-              <h3>助手帮你写</h3>
-              <p>整理零散材料、提炼项目成果、优化摘要与经历表达；不会替你编造学历、数字或成绩。</p>
+              <h3>先找到岗位证据</h3>
+              <p>把岗位要求逐条映射到你的经历原文，区分“有证据、有线索、待补充”，不把关键词命中伪装成录用概率。</p>
             </article>
             <article>
               <span><Target size={22} /></span>
-              <h3>围绕目标优化</h3>
-              <p>创建时选择留学申请或毕业求职，再选择院校、企业与方向，让建议服务于真实目标。</p>
+              <h3>专业版式建立信任</h3>
+              <p>按学术研究、金融咨询、科技产品、工程制造和央国企等阅读场景推荐版式；不是目标单位官方模板。</p>
             </article>
             <article>
               <span><Download size={22} /></span>
@@ -99,11 +100,11 @@ export default function HomePage() {
           <div className={styles.workspaceCopy}>
             <p className="eyebrow">以事实为起点</p>
             <h2>你提供经历，助手负责把它说清楚。</h2>
-            <p>空白章节可以从材料开始整理；已有内容可以逐段优化；完成后再做整份简历检查。</p>
+            <p>岗位要求决定“写什么”，专业版式决定“如何被快速读懂”。两者都必须落在你的真实材料上。</p>
             <ul>
-              <li><Check size={17} /> 生成、改写和检查都在编辑器里完成</li>
-              <li><Check size={17} /> 每条建议先看内容，再决定是否采用</li>
-              <li><Check size={17} /> 发现能力缺口时，才显示一条可选学习提示</li>
+              <li><Check size={17} /> 每条岗位要求都能展开查看对应的简历原文</li>
+              <li><Check size={17} /> 缺少证据时先追问事实，不自动补数字或成果</li>
+              <li><Check size={17} /> BOSS、智联等链接仅作用户来源记录，不自动抓取</li>
             </ul>
             <Link className="button button-primary" href="/dashboard?new=1">开始制作 <ArrowRight size={17} /></Link>
           </div>
@@ -112,11 +113,11 @@ export default function HomePage() {
             <div className={styles.demoHeader}><div><Sparkles size={17} /><strong>简历助手</strong></div><span>项目经历</span></div>
             <div className={styles.userMessage}>
               <span><MessageSquareText size={15} /></span>
-              <p>我负责校园活动报名系统，协调 3 位同学，主要做需求和数据分析。</p>
+              <p>岗位要求：能建立指标体系，并推动产品、设计和研发协作。</p>
             </div>
             <div className={styles.aiMessage}>
               <span><Sparkles size={15} /></span>
-              <div><small>建议先补充两个事实</small><strong>上线用了多久？报名效率或参与人数有什么真实变化？</strong><p>确认后，我可以把材料整理成一条成果描述。</p></div>
+              <div><small>找到一条用户证据</small><strong>“协调 3 位同学完成需求分析与上线”</strong><p>下一步补充指标口径和真实结果；如果没有可靠数字，就不写数字。</p></div>
             </div>
             <div className={styles.outputBar}>
               <span><FileText size={16} /> PDF</span>

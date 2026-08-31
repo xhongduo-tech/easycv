@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { ensureDatabase, getExistingSession, getDatabase, recordAudit, withSessionCookie } from "@/../db";
 import { apiError, parseRequest, rejectCrossOrigin, withApiError } from "@/lib/api";
-import { mapResume, type ResumeRow, type TargetRow } from "@/lib/db-mappers";
+import { mapResume, mapTargetBrief, type ResumeRow, type TargetBriefRow, type TargetRow } from "@/lib/db-mappers";
 import { calculateProgress } from "@/lib/utils";
 import { resumeIdParamSchema, updateResumeSchema } from "@/lib/validation";
 
@@ -23,7 +23,13 @@ export async function GET(request: Request, context: RouteContext) {
     if (!params.success) return withSessionCookie(apiError(422, "VALIDATION_ERROR", "简历 ID 无效"), session);
     const row = await getOwnedResume(params.data.id, session.userId);
     if (!row) return withSessionCookie(apiError(404, "NOT_FOUND", "没有找到这份简历"), session);
-    return withSessionCookie(NextResponse.json({ resume: mapResume(row) }), session);
+    const brief = await getDatabase()
+      .prepare("SELECT * FROM resume_target_briefs WHERE resume_id = ? AND user_id = ?")
+      .bind(row.id, session.userId)
+      .first<TargetBriefRow>();
+    return withSessionCookie(NextResponse.json({
+      resume: { ...mapResume(row), ...(brief ? { targetBrief: mapTargetBrief(brief) } : {}) },
+    }), session);
   } catch (error) {
     return withApiError(error);
   }
@@ -51,6 +57,15 @@ export async function PATCH(request: Request, context: RouteContext) {
     const db = getDatabase();
     const content = parsed.data.content ?? mapResume(current).content;
     const effectiveTrack = parsed.data.track ?? current.track;
+    if (effectiveTrack !== current.track) {
+      const brief = await db
+        .prepare("SELECT resume_id FROM resume_target_briefs WHERE resume_id = ? AND user_id = ?")
+        .bind(current.id, session.userId)
+        .first<{ resume_id: string }>();
+      if (brief) {
+        return withSessionCookie(apiError(422, "VALIDATION_ERROR", "切换简历用途前，请先清除当前岗位或项目依据"), session);
+      }
+    }
     let targetName = parsed.data.targetName ?? current.target_name;
     let targetProfileId = parsed.data.targetProfileId ?? current.target_profile_id;
     if (parsed.data.targetName && !parsed.data.targetProfileId) targetProfileId = null;

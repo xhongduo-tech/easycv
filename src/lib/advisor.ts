@@ -1,4 +1,5 @@
-import type { AdvisorResult, ResumeContent, TargetProfile, Track } from "@/types/resume";
+import { analyzeJobFit } from "@/lib/job-fit";
+import type { AdvisorResult, ResumeContent, TargetBrief, TargetProfile, Track } from "@/types/resume";
 
 const metricPattern = /\d+(?:\.\d+)?\s*(?:%|名|人|次|万|千|周|月|项|篇|家|个|小时|天|倍|\+)/;
 
@@ -7,6 +8,7 @@ export function createAdvice(
   track: Track,
   target?: TargetProfile,
   section = "overview",
+  targetBrief?: TargetBrief,
 ): AdvisorResult {
   const targetLabel = target?.name ?? (track === "study" ? "目标院校" : "目标企业");
   const overviewBullets = [
@@ -39,10 +41,17 @@ export function createAdvice(
               ? { skills: content.skills, languages: content.languages, awards: content.awards }
               : content;
   const measurable = scopedBullets.filter((bullet) => metricPattern.test(bullet)).length;
-  const keywordPool = target?.keywords ??
+  const jobFit = track === "career" && targetBrief?.requirementsText
+    ? analyzeJobFit(content, targetBrief)
+    : undefined;
+  const briefKeywords = jobFit?.items.flatMap((item) => item.keywords) ?? [];
+  const keywordPool = [...new Set([
+    ...briefKeywords,
+    ...(target?.keywords ??
     (track === "study"
       ? ["研究潜力", "方法", "学术严谨", "独立探索"]
-      : ["用户价值", "协同", "数据驱动", "业务影响"]);
+      : ["用户价值", "协同", "数据驱动", "业务影响"])),
+  ])].slice(0, 10);
   const haystack = JSON.stringify(scopedContent).toLowerCase();
   const matchedKeywords = keywordPool.filter((keyword) => haystack.includes(keyword.toLowerCase()));
 
@@ -57,6 +66,17 @@ export function createAdvice(
   score = Math.min(96, score);
 
   const suggestions: AdvisorResult["suggestions"] = [];
+  if (jobFit?.missingCount) {
+    const firstMissing = jobFit.items.find((item) => item.status === "missing");
+    suggestions.push({
+      id: "job-evidence-gap",
+      severity: "high",
+      title: "先补岗位要求对应的真实证据",
+      detail: firstMissing
+        ? `岗位材料提到“${firstMissing.requirement}”，当前简历没有找到直接证据。如确有相关经历，请补充事实；否则不要为了匹配而编造。`
+        : "岗位材料中仍有要求缺少简历证据，请先补充真实经历。",
+    });
+  }
   if ((section === "overview" || section === "summary") && content.summary.length < 70) {
     suggestions.push({
       id: "summary-evidence",

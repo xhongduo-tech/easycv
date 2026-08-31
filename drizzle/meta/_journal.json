@@ -22,6 +22,13 @@
       "when": 1788148000000,
       "tag": "0002_model_usage_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1788157648000,
+      "tag": "0003_resume_target_briefs",
+      "breakpoints": true
     }
   ]
 }

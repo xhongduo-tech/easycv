@@ -11,6 +11,7 @@ flowchart LR
   Routes --> Domain[Validation + Domain Services]
   Domain --> D1[(Cloudflare D1)]
   Domain --> Advisor[Local Advisor]
+  Domain --> Evidence[JD Evidence Mapper]
   App --> Renderer[Canonical Resume Renderer]
   Renderer --> Print[Browser PDF / ATS Text / GitHub Pages HTML]
   Domain --> Growth[Growth Route Catalog]
@@ -22,8 +23,10 @@ flowchart LR
 
 - Identity：随机 HttpOnly 访客会话映射到独立用户，预留实名账号与角色模型。
 - Target Catalog：101 所院校与 85 家企业的编辑适配方案，包含类别、地区、关键词、优先级、来源类型与复核时间。
-- Template：16 套内容与样式分离的共享视觉版式，按目标策略推荐而不伪装成官方模板。
+- Template：16 套版式映射到 8 个专业阅读情境；模板拥有密度、排版理由和设计原则，按目标企业与具体岗位推荐而不伪装成官方模板。
 - Resume：简历项目、当前修订、内容 JSON 和软删除。
+- Target Brief：每份简历可独立保存目标岗位/项目、要求文本、来源标签与链接、记录日期和独立修订。
+- Job Evidence：确定性提取岗位要求，只引用用户简历原文，输出直接证据、相关线索、缺口与撰写动作。
 - Revision：每次内容更新生成不可变快照。
 - Recommendation：目标化规则检查、可选模型建议、逐次同意记录和有界用量事件。
 - Export：浏览器 A4 PDF、服务端 ATS 文本、JSON 与 GitHub Pages 单文件 HTML。
@@ -39,6 +42,7 @@ erDiagram
   TEMPLATES ||--o{ RESUMES : renders
   RESUMES ||--o{ RESUME_VERSIONS : snapshots
   RESUMES ||--o{ SUGGESTION_EVENTS : receives
+  RESUMES ||--o| RESUME_TARGET_BRIEFS : describes
   USERS ||--o{ AUDIT_EVENTS : performs
   CATALOG_META ||--|| TARGET_PROFILES : versions
 
@@ -76,6 +80,16 @@ erDiagram
     integer revision UK
     text content_json
   }
+  RESUME_TARGET_BRIEFS {
+    text resume_id PK
+    text user_id FK
+    text kind
+    text focus_name
+    text requirements_text
+    text source_type
+    text source_url
+    integer revision
+  }
   CATALOG_META {
     text key PK
     integer version
@@ -102,6 +116,7 @@ Advisor 在平台 API 内提供两层能力：默认确定性规则分析，以�
 - 不生成不存在的学历、职位、奖项或成果数字。
 - 缺失数字时输出待核实占位语义。
 - 建议结合赛道、目标画像与当前章节。
+- 求职建议在有岗位依据时使用优先提取的最多 12 项要求，而不发送整段 JD；岗位描述被视为不可信数据，提示词注入不会改变系统任务。所有送模自由文本先移除常见招聘邮箱、电话、联系账号和联系人标识，不发送来源 URL。
 - 基础建议不逐次写分析事件；用量表只保存随机会话标识、散列网络标识与时间。模型同意表保存简历 ID、用途、提供者、同意版本与时间，不记录完整 CV。
 - 外部调用使用严格 JSON Schema 结构化输出、25 秒超时、`store: false`，响应仍经过本地 Zod 校验。
 - 概览分析通过显式字段投影移除姓名、邮箱、电话、教育/经历所在地和项目链接；其他请求只发送目标章节和最小必要上下文。
@@ -138,3 +153,4 @@ Advisor 在平台 API 内提供两层能力：默认确定性规则分析，以�
 - 联系方式默认不进入网页文件；用户需要单独勾选并确认公开风险。
 - 当前不请求 GitHub OAuth 权限，也不代表用户创建或公开仓库。
 - 编辑器内的可选学习提示只指向提供方官方页面，不把未完成课程自动写入简历，也不承诺证书认可、录取或录用结果。
+- BOSS、智联等招聘平台不作为自动抓取源。第一阶段只处理用户为本人简历提供的单个 JD；不进入跨用户检索、训练或公共职位库。规模化来源只接企业官方公开 ATS API、书面授权或许可数据 feed，并保留来源、使用依据、核验日期和下线记录。

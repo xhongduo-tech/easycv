@@ -97,6 +97,28 @@ export const resumes = sqliteTable(
   ],
 );
 
+export const resumeTargetBriefs = sqliteTable(
+  "resume_target_briefs",
+  {
+    resumeId: text("resume_id")
+      .primaryKey()
+      .references(() => resumes.id),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    kind: text("kind").notNull(),
+    focusName: text("focus_name").notNull(),
+    requirementsText: text("requirements_text").notNull().default(""),
+    sourceType: text("source_type").notNull().default("manual"),
+    sourceUrl: text("source_url"),
+    capturedAt: text("captured_at").notNull(),
+    revision: integer("revision").notNull().default(1),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [index("idx_resume_target_briefs_user_updated").on(table.userId, table.updatedAt)],
+);
+
 export const resumeVersions = sqliteTable(
   "resume_versions",
   {

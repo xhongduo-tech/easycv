@@ -42,8 +42,24 @@ describe("standalone web resume", () => {
 
   it("includes contact only after explicit opt-in", () => {
     const resume = fixture();
+    resume.content.education[0].location = "教育地点";
+    resume.content.experience[0].location = "工作地点";
+    const privateHtml = toStandaloneHtml(resume);
     const html = toStandaloneHtml(resume, { includeContact: true });
+    expect(privateHtml).not.toContain("教育地点");
+    expect(privateHtml).not.toContain("工作地点");
     expect(html).toContain(resume.content.basics.email);
     expect(html).toContain(resume.content.basics.phone);
+    expect(html).toContain("教育地点");
+    expect(html).toContain("工作地点");
+  });
+
+  it("carries the professional template family into the web version", () => {
+    const resume = fixture();
+    const template = templates.find((item) => item.id === "sterling");
+    const html = toStandaloneHtml(resume, { template });
+    expect(html).toContain('class="family-finance layout-compact density-compact template-sterling"');
+    expect(html).toContain('data-template-id="sterling"');
+    expect(html).toContain("<h3>产品策略实习生</h3>");
   });
 });

@@ -9,7 +9,7 @@ import {
 } from "@/../db";
 import { createAdvice } from "@/lib/advisor";
 import { apiError, parseRequest, rejectCrossOrigin, withApiError } from "@/lib/api";
-import { mapResume, mapTarget, type ResumeRow, type TargetRow } from "@/lib/db-mappers";
+import { mapResume, mapTarget, mapTargetBrief, type ResumeRow, type TargetBriefRow, type TargetRow } from "@/lib/db-mappers";
 import {
   createOpenAIAdvice,
   getOpenAIAdvisorConfig,
@@ -68,6 +68,11 @@ export async function POST(request: Request) {
     }
 
     const target = targetRow ? mapTarget(targetRow) : undefined;
+    const targetBriefRow = await db
+      .prepare("SELECT * FROM resume_target_briefs WHERE resume_id = ? AND user_id = ?")
+      .bind(resume.id, session.userId)
+      .first<TargetBriefRow>();
+    const targetBrief = targetBriefRow ? mapTargetBrief(targetBriefRow) : undefined;
     const networkHash = await getRequestNetworkHash(request);
     if (!await reserveAdviceQuota(db, session.userId, networkHash)) {
       return withSessionCookie(apiError(429, "RATE_LIMITED", "建议请求过于频繁，请稍后再试"), session);
@@ -77,11 +82,17 @@ export async function POST(request: Request) {
     let provider = "local-rules";
     let modelFallback = false;
     let fallbackReason: ModelFallbackReason | undefined;
-    let result = createAdvice(content, track, target, section);
+    let result = createAdvice(content, track, target, section, targetBrief);
 
     if (parsed.data.allowExternalModel && modelConfig) {
       const providerKey = `openai:${modelConfig.model}`;
-      const modelInputBytes = new TextEncoder().encode(JSON.stringify(content)).byteLength;
+      const modelInputBytes = new TextEncoder().encode(JSON.stringify({
+        content,
+        targetBrief: targetBrief ? {
+          focusName: targetBrief.focusName,
+          requirementsText: targetBrief.requirementsText,
+        } : undefined,
+      })).byteLength;
       if (modelInputBytes > MAX_MODEL_INPUT_BYTES) {
         modelFallback = true;
         fallbackReason = "input-too-large";
@@ -121,6 +132,7 @@ export async function POST(request: Request) {
                     track,
                     targetName: target?.name ?? targetName ?? (track === "study" ? "目标院校" : "目标企业"),
                     target,
+                    targetBrief,
                     section,
                     signal: request.signal,
                   }, modelConfig);

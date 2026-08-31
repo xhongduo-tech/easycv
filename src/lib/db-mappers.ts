@@ -1,4 +1,5 @@
-import type { ResumeContent, ResumeRecord, ResumeTemplate, TargetProfile } from "@/types/resume";
+import type { ResumeContent, ResumeRecord, ResumeTemplate, TargetBrief, TargetProfile } from "@/types/resume";
+import { withTemplateDesignMeta } from "@/lib/template-system";
 
 export interface ResumeRow {
   id: string;
@@ -42,6 +43,20 @@ export interface TargetRow {
   reviewed_at: string;
 }
 
+export interface TargetBriefRow {
+  resume_id: string;
+  user_id: string;
+  kind: "career-job" | "study-program";
+  focus_name: string;
+  requirements_text: string;
+  source_type: "employer-official" | "boss" | "zhaopin" | "other-platform" | "manual";
+  source_url: string | null;
+  captured_at: string;
+  revision: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export function mapResume(row: ResumeRow): ResumeRecord {
   return {
     id: row.id,
@@ -61,7 +76,7 @@ export function mapResume(row: ResumeRow): ResumeRecord {
 }
 
 export function mapTemplate(row: TemplateRow): ResumeTemplate {
-  return {
+  return withTemplateDesignMeta({
     id: row.id,
     name: row.name,
     description: row.description,
@@ -71,7 +86,7 @@ export function mapTemplate(row: TemplateRow): ResumeTemplate {
     tags: JSON.parse(row.tags_json) as string[],
     active: Boolean(row.active),
     recommendedFor: JSON.parse(row.recommended_for_json) as string[],
-  };
+  });
 }
 
 export function mapTarget(row: TargetRow): TargetProfile {
@@ -87,5 +102,20 @@ export function mapTarget(row: TargetRow): TargetProfile {
     tone: row.tone,
     sourceType: row.source_type,
     reviewedAt: row.reviewed_at,
+  };
+}
+
+export function mapTargetBrief(row: TargetBriefRow): TargetBrief {
+  return {
+    resumeId: row.resume_id,
+    kind: row.kind,
+    focusName: row.focus_name,
+    requirementsText: row.requirements_text,
+    sourceType: row.source_type,
+    ...(row.source_url ? { sourceUrl: row.source_url } : {}),
+    capturedAt: row.captured_at,
+    revision: row.revision,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }

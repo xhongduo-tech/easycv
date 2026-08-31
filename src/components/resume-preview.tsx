@@ -1,10 +1,11 @@
 import type { CSSProperties } from "react";
 import { cn } from "@/lib/utils";
+import { getTemplateDesignMeta } from "@/lib/template-system";
 import type { ResumeContent, ResumeTemplate } from "@/types/resume";
 
 type PreviewProps = {
   content: ResumeContent;
-  template?: Pick<ResumeTemplate, "layout" | "accent" | "name">;
+  template?: Pick<ResumeTemplate, "id" | "layout" | "accent" | "name" | "family" | "density">;
   className?: string;
   scale?: "card" | "editor" | "print";
 };
@@ -12,10 +13,21 @@ type PreviewProps = {
 export function ResumePreview({ content, template, className, scale = "editor" }: PreviewProps) {
   const layout = template?.layout ?? "modern";
   const accent = template?.accent ?? "#3559e0";
+  const design = template?.family && template?.density
+    ? { family: template.family, density: template.density }
+    : getTemplateDesignMeta(template?.id);
 
   return (
     <article
-      className={cn("resume-paper", `resume-${layout}`, `resume-scale-${scale}`, className)}
+      className={cn(
+        "resume-paper",
+        `resume-${layout}`,
+        `resume-family-${design.family}`,
+        `resume-density-${design.density}`,
+        template?.id && `resume-template-${template.id}`,
+        `resume-scale-${scale}`,
+        className,
+      )}
       style={{ "--resume-accent": accent } as CSSProperties}
       aria-label="简历实时预览"
     >

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { ensureDatabase, getOrCreateSession, getDatabase, recordAudit, withSessionCookie } from "@/../db";
 import { apiError, parseRequest, rejectCrossOrigin, withApiError } from "@/lib/api";
-import { mapResume, type ResumeRow, type TargetRow } from "@/lib/db-mappers";
+import { mapResume, mapTargetBrief, type ResumeRow, type TargetBriefRow, type TargetRow } from "@/lib/db-mappers";
 import { createBlankContent } from "@/lib/sample-data";
 import { calculateProgress } from "@/lib/utils";
 import { createResumeSchema, resumeListQuerySchema } from "@/lib/validation";
@@ -78,7 +78,7 @@ export async function POST(request: Request) {
     const title = input.title ?? `${targetName} · ${input.track === "study" ? "申请 CV" : "求职简历"}`;
     const contentJson = JSON.stringify(content);
     const progress = calculateProgress(content);
-    await db.batch([
+    const createStatements = [
       db
         .prepare(`INSERT INTO resumes
           (id, user_id, title, track, target_profile_id, target_name, template_id, status, progress, revision, schema_version, content_json, created_at, updated_at)
@@ -101,13 +101,38 @@ export async function POST(request: Request) {
         .prepare(`INSERT INTO resume_versions (id, resume_id, revision, content_json, created_at)
           VALUES (?, ?, 1, ?, ?)`)
         .bind(crypto.randomUUID(), id, contentJson, now),
-    ]);
+    ];
+    if (input.targetBrief) {
+      createStatements.push(db.prepare(`INSERT INTO resume_target_briefs
+        (resume_id, user_id, kind, focus_name, requirements_text, source_type, source_url, captured_at, revision, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`)
+        .bind(
+          id,
+          session.userId,
+          input.track === "career" ? "career-job" : "study-program",
+          input.targetBrief.focusName,
+          input.targetBrief.requirementsText,
+          input.targetBrief.sourceType,
+          input.targetBrief.sourceUrl || null,
+          now,
+          now,
+          now,
+        ));
+    }
+    await db.batch(createStatements);
     await recordAudit(session.userId, "resume.created", "resume", id, { track: input.track }).catch(() => undefined);
     const row = await db
       .prepare("SELECT * FROM resumes WHERE id = ? AND user_id = ?")
       .bind(id, session.userId)
       .first<ResumeRow>();
-    return withSessionCookie(NextResponse.json({ resume: mapResume(row!) }, { status: 201 }), session);
+    const brief = input.targetBrief
+      ? await db.prepare("SELECT * FROM resume_target_briefs WHERE resume_id = ? AND user_id = ?")
+          .bind(id, session.userId)
+          .first<TargetBriefRow>()
+      : null;
+    return withSessionCookie(NextResponse.json({
+      resume: { ...mapResume(row!), ...(brief ? { targetBrief: mapTargetBrief(brief) } : {}) },
+    }, { status: 201 }), session);
   } catch (error) {
     return withApiError(error);
   }

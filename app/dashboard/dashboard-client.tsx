@@ -101,15 +101,30 @@ export function DashboardClient({ initialCreate = false, initialTrack }: { initi
   async function duplicate(resume: ResumeRecord) {
     setBusyId(resume.id);
     try {
+      const detailResponse = await fetch(`/api/resumes/${resume.id}`);
+      const detailResult = (await detailResponse.json()) as { resume?: ResumeRecord; error?: { message?: string } };
+      if (!detailResponse.ok || !detailResult.resume) {
+        throw new Error(detailResult.error?.message ?? "读取原简历失败");
+      }
+      const source = detailResult.resume;
+      const copySuffix = " · 副本";
       const response = await fetch("/api/resumes", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          track: resume.track,
-          ...(resume.targetProfileId ? { targetProfileId: resume.targetProfileId } : { targetName: resume.targetName }),
-          templateId: resume.templateId,
-          title: `${resume.title} · 副本`,
-          content: resume.content,
+          track: source.track,
+          ...(source.targetProfileId ? { targetProfileId: source.targetProfileId } : { targetName: source.targetName }),
+          templateId: source.templateId,
+          title: `${source.title.slice(0, 160 - copySuffix.length)}${copySuffix}`,
+          content: source.content,
+          ...(source.targetBrief ? {
+            targetBrief: {
+              focusName: source.targetBrief.focusName,
+              requirementsText: source.targetBrief.requirementsText,
+              sourceType: source.targetBrief.sourceType,
+              sourceUrl: source.targetBrief.sourceUrl ?? "",
+            },
+          } : {}),
         }),
       });
       const result = (await response.json()) as { resume?: ResumeRecord; error?: { message?: string } };

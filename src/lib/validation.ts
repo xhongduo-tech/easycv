@@ -9,6 +9,44 @@ const bulletSchema = requiredText("描述", 800);
 
 export const trackSchema = z.enum(["study", "career"]);
 export const resumeStatusSchema = z.enum(["draft", "ready", "archived"]);
+export const targetBriefSourceSchema = z.enum(["employer-official", "boss", "zhaopin", "other-platform", "manual"]);
+
+const optionalHttpUrl = z.union([
+  z.literal(""),
+  z.string().trim().url("来源链接格式不正确").max(2_048).refine((value) => {
+    try {
+      const protocol = new URL(value).protocol;
+      return protocol === "http:" || protocol === "https:";
+    } catch {
+      return false;
+    }
+  }, "来源链接只支持 http 或 https"),
+]);
+
+const requirementsTextSchema = z.string().trim().max(12_000, "岗位描述不能超过 12000 个字符").superRefine((value, context) => {
+  if (new TextEncoder().encode(value).byteLength > 30_000) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "岗位描述不能超过 30 KB" });
+  }
+});
+
+export const createTargetBriefSchema = z.object({
+  focusName: requiredText("目标岗位或项目", 160),
+  requirementsText: requirementsTextSchema.default(""),
+  sourceType: targetBriefSourceSchema.default("manual"),
+  sourceUrl: optionalHttpUrl.optional(),
+}).strict();
+
+export const putTargetBriefSchema = z.object({
+  expectedRevision: z.number().int().min(0),
+  focusName: requiredText("目标岗位或项目", 160),
+  requirementsText: requirementsTextSchema,
+  sourceType: targetBriefSourceSchema,
+  sourceUrl: optionalHttpUrl.optional(),
+}).strict();
+
+export const deleteTargetBriefSchema = z.object({
+  expectedRevision: z.number().int().positive(),
+}).strict();
 
 export const basicsSchema = z
   .object({
@@ -84,6 +122,7 @@ export const createResumeSchema = z
     templateId: requiredText("模板 ID", 100).optional(),
     status: resumeStatusSchema.optional(),
     content: resumeContentSchema.optional(),
+    targetBrief: createTargetBriefSchema.optional(),
   })
   .strict()
   .refine((value) => value.targetProfileId !== undefined || value.targetName !== undefined, {

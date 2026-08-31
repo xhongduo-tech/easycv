@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import Link from "next/link";
 import {
   AlertCircle,
@@ -9,10 +9,12 @@ import {
   Award,
   BookOpenCheck,
   BriefcaseBusiness,
+  CalendarClock,
   Check,
   CheckCircle2,
   ChevronDown,
   CircleUserRound,
+  ClipboardList,
   Download,
   Eye,
   ExternalLink,
@@ -23,14 +25,17 @@ import {
   Languages,
   LayoutTemplate,
   Lightbulb,
+  Link2,
   ListChecks,
   LoaderCircle,
   Menu,
   Plus,
   Printer,
+  Pencil,
   RefreshCw,
   Save,
   Sparkles,
+  ShieldCheck,
   Target,
   Trash2,
   WandSparkles,
@@ -39,6 +44,7 @@ import {
 import { Brand } from "@/components/brand";
 import { ResumePreview } from "@/components/resume-preview";
 import { recommendGrowthGaps } from "@/lib/growth-data";
+import { analyzeJobFit, targetBriefSourceLabels } from "@/lib/job-fit";
 import { shortId } from "@/lib/utils";
 import { toStandaloneHtml } from "@/lib/web-resume";
 import type {
@@ -49,6 +55,8 @@ import type {
   ResumeContent,
   ResumeRecord,
   ResumeTemplate,
+  TargetBrief,
+  TargetBriefSource,
 } from "@/types/resume";
 import styles from "./builder.module.css";
 
@@ -101,6 +109,7 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
   const [mobileView, setMobileView] = useState<MobileView>("edit");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(initialExport);
+  const [briefOpen, setBriefOpen] = useState(false);
   const changeSequence = useRef(0);
   const saving = useRef(false);
   const resumeRef = useRef<ResumeRecord | null>(null);
@@ -109,7 +118,11 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
   const sidebarRef = useRef<HTMLElement>(null);
   const sidebarTriggerRef = useRef<HTMLButtonElement>(null);
   const sidebarCloseRef = useRef<HTMLButtonElement>(null);
+  const editorPanelRef = useRef<HTMLElement>(null);
+  const editorHeadingRef = useRef<HTMLHeadingElement>(null);
+  const briefTriggerRef = useRef<HTMLButtonElement>(null);
   const closeExport = useCallback(() => setExportOpen(false), []);
+  const closeBrief = useCallback(() => setBriefOpen(false), []);
 
   const loadResume = useCallback(async () => {
     setLoading(true);
@@ -276,18 +289,24 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
     };
   }, []);
 
-  const updateResume = useCallback((updater: (current: ResumeRecord) => ResumeRecord) => {
+  const invalidateAdvice = useCallback(() => {
     adviceRequest.current?.abort();
-    changeSequence.current += 1;
-    setResume((current) => (current ? updater(current) : current));
-    setDirty(true);
-    setSaveState("idle");
+    adviceRequest.current = null;
+    setAdviceLoading(false);
     setAdvice(null);
     setAdviceSection(null);
     setAdviceError("");
     setUndoContent(null);
     setRewriteTargetId("");
   }, []);
+
+  const updateResume = useCallback((updater: (current: ResumeRecord) => ResumeRecord) => {
+    invalidateAdvice();
+    changeSequence.current += 1;
+    setResume((current) => (current ? updater(current) : current));
+    setDirty(true);
+    setSaveState("idle");
+  }, [invalidateAdvice]);
 
   const updateContent = useCallback(
     (updater: (content: ResumeContent) => ResumeContent) => {
@@ -303,6 +322,13 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
 
   const learningHint = useMemo(
     () => resume ? recommendGrowthGaps(resume, 1)[0] : undefined,
+    [resume],
+  );
+
+  const jobFit = useMemo(
+    () => resume?.track === "career" && resume.targetBrief?.requirementsText
+      ? analyzeJobFit(resume.content, resume.targetBrief)
+      : undefined,
     [resume],
   );
 
@@ -459,7 +485,7 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
             <LayoutTemplate size={16} />
             <span className="sr-only">选择模板</span>
             <select value={resume.templateId} onChange={(event) => updateResume((current) => ({ ...current, templateId: event.target.value }))}>
-              {templates.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}
+              {templates.map((item) => <option value={item.id} key={item.id}>{item.name}{item.familyLabel ? ` · ${item.familyLabel}` : ""}</option>)}
             </select>
             <ChevronDown size={13} />
           </label>
@@ -482,11 +508,17 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
           </div>
           <div className={styles.targetBadge}>
             <Target size={17} />
-            <div><span>当前目标</span><strong>{resume.targetName}</strong></div>
+            <div><span>当前目标</span><strong>{resume.targetName}{resume.targetBrief?.focusName ? ` · ${resume.targetBrief.focusName}` : ""}</strong></div>
           </div>
+          {template && (
+            <div className={styles.templateTrust}>
+              <LayoutTemplate size={16} />
+              <div><span>当前专业版式</span><strong>{template.familyLabel ?? template.name}</strong><p>{template.rationale ?? template.description}</p></div>
+            </div>
+          )}
           <div className={styles.mobileDocumentSettings}>
             <label><span>简历名称</span><input value={resume.title} onChange={(event) => updateResume((current) => ({ ...current, title: event.target.value }))} /></label>
-            <label><span>模板</span><select value={resume.templateId} onChange={(event) => updateResume((current) => ({ ...current, templateId: event.target.value }))}>{templates.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label>
+            <label><span>模板</span><select value={resume.templateId} onChange={(event) => updateResume((current) => ({ ...current, templateId: event.target.value }))}>{templates.map((item) => <option value={item.id} key={item.id}>{item.name}{item.familyLabel ? ` · ${item.familyLabel}` : ""}</option>)}</select></label>
           </div>
           <nav aria-label="简历章节">
             {sections.map((section, index) => {
@@ -513,11 +545,11 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
           </div>
         </aside>
 
-        <section id="builder-edit" role="tabpanel" aria-labelledby="builder-tab-edit" className={`${styles.editorPanel} ${mobileView !== "edit" ? styles.mobileHidden : ""}`}>
+        <section ref={editorPanelRef} id="builder-edit" role="tabpanel" aria-labelledby="builder-tab-edit" className={`${styles.editorPanel} ${mobileView !== "edit" ? styles.mobileHidden : ""}`}>
           <div className={styles.editorHeading}>
             <div>
               <span>{String(sections.findIndex((item) => item.id === activeSection) + 1).padStart(2, "0")}</span>
-              <div><h1>{sections.find((item) => item.id === activeSection)?.label}</h1><p>{sectionDescription(activeSection, resume.track)}</p></div>
+              <div><h1 ref={editorHeadingRef} tabIndex={-1}>{sections.find((item) => item.id === activeSection)?.label}</h1><p>{sectionDescription(activeSection, resume.track)}</p></div>
             </div>
             <button className="button button-ghost" type="button" onClick={() => void requestAdvice()} disabled={adviceLoading}>
               {adviceLoading ? <LoaderCircle className={styles.spin} size={16} /> : <WandSparkles size={16} />} 优化当前内容
@@ -539,6 +571,22 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
             {activeSection === "projects" && <ProjectsForm content={resume.content} update={updateContent} />}
             {activeSection === "extras" && <ExtrasForm content={resume.content} update={updateContent} />}
           </div>
+          {resume.track === "career" && (
+            <JobEvidenceCard
+              resume={resume}
+              jobFit={jobFit}
+              editButtonRef={briefTriggerRef}
+              onEdit={() => setBriefOpen(true)}
+              onOpenSection={(section) => {
+                selectSection(section);
+                setMobileView("edit");
+                window.requestAnimationFrame(() => {
+                  editorPanelRef.current?.scrollTo({ top: 0, behavior: "auto" });
+                  editorHeadingRef.current?.focus({ preventScroll: true });
+                });
+              }}
+            />
+          )}
           {learningHint && (
             <details className={styles.learningHint} id="learning-hint">
               <summary><span><BookOpenCheck size={17} /> 可选补强建议</span><span>仅在发现相关证据缺口时显示</span></summary>
@@ -557,7 +605,7 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
         <section id="builder-preview" role="tabpanel" aria-labelledby="builder-tab-preview" className={`${styles.previewPanel} ${mobileView !== "preview" ? styles.mobileHidden : ""}`}>
           <div className={styles.previewToolbar}>
             <span><Eye size={15} /> 实时预览</span>
-            <div><small>A4</small><span>100%</span></div>
+            <div><small>A4</small><span>超出自动续页</span></div>
           </div>
           <div className={styles.paperViewport}>
             <ResumePreview content={resume.content} template={template} scale="editor" className={styles.printResume} />
@@ -573,7 +621,7 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
             {modelAvailable ? (
               <>
                 <label><input type="checkbox" checked={allowExternalModel} onChange={(event) => { setAllowExternalModel(event.target.checked); setAdvice(null); }} /><span><Check size={12} /></span>使用 OpenAI 大模型</label>
-                <small>仅在你点击“优化”时发送当前章节、标题与目标；联系方式只发送是否填写，不发送具体值。请求设为不存储响应。</small>
+                <small>仅在你点击“优化”时发送当前章节、目标，以及你已填写的岗位描述；简历联系方式、地点、项目链接不发送，岗位文本中的常见邮箱、电话和微信号会先移除。请求设为不存储响应。</small>
               </>
             ) : (
               <p>当前环境尚未配置模型凭据，先使用基础分析；结果会明确标注，不冒充大模型。</p>
@@ -583,7 +631,7 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
             <div className={styles.adviceEmpty}>
               <span><Lightbulb size={23} /></span>
               <h2>把当前章节写得更好</h2>
-              <p>助手会结合“{resume.targetName}”与当前内容，指出缺失信息并给出可确认的表达建议。</p>
+              <p>助手会结合“{resume.targetName}{resume.targetBrief?.focusName ? ` · ${resume.targetBrief.focusName}` : ""}”与当前内容，指出缺失信息并给出可确认的表达建议。</p>
               <button className="button button-primary" type="button" onClick={() => void requestAdvice()}><WandSparkles size={16} /> 优化当前内容</button>
             </div>
           )}
@@ -591,7 +639,7 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
           {advice && !adviceLoading && (
             <div className={styles.adviceContent}>
               <div className={styles.scoreCard}>
-                <div className={styles.scoreRing} style={{ "--score": `${advice.score * 3.6}deg` } as React.CSSProperties}><strong>{advice.score}</strong><span>/ 100</span></div>
+                <div className={styles.scoreRing}><ListChecks size={19} /><span>内容检查</span></div>
                 <div><span>当前内容检查</span><strong>{advice.headline}</strong><small>{advice.provider === "local-rules" ? (advice.modelFallback && advice.fallbackReason ? modelFallbackLabels[advice.fallbackReason] : "当前使用基础分析；不会冒充大模型结果") : "模型建议需逐条核实"}</small></div>
               </div>
               <div className={styles.suggestionList}>
@@ -638,7 +686,280 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
         <ResumePreview content={resume.content} template={template} scale="print" />
       </div>
       {exportOpen && <ExportDialog resume={resume} template={template} onClose={closeExport} />}
+      {briefOpen && (
+        <TargetBriefDialog
+          resume={resume}
+          onClose={closeBrief}
+          returnFocusRef={briefTriggerRef}
+          onSaved={(targetBrief) => {
+            invalidateAdvice();
+            setResume((current) => current ? { ...current, targetBrief } : current);
+            setBriefOpen(false);
+          }}
+          onCleared={() => {
+            invalidateAdvice();
+            setResume((current) => {
+              if (!current) return current;
+              const { targetBrief: _targetBrief, ...withoutBrief } = current;
+              void _targetBrief;
+              return withoutBrief;
+            });
+            setBriefOpen(false);
+          }}
+        />
+      )}
     </main>
+  );
+}
+
+function JobEvidenceCard({
+  resume,
+  jobFit,
+  editButtonRef,
+  onEdit,
+  onOpenSection,
+}: {
+  resume: ResumeRecord;
+  jobFit?: ReturnType<typeof analyzeJobFit>;
+  editButtonRef: RefObject<HTMLButtonElement | null>;
+  onEdit: () => void;
+  onOpenSection: (section: SectionId) => void;
+}) {
+  const brief = resume.targetBrief;
+  const capturedDate = brief?.capturedAt ? new Date(brief.capturedAt).toLocaleDateString("zh-CN") : "";
+  return (
+    <section className={styles.jobEvidence} aria-labelledby="job-evidence-title">
+      <div className={styles.jobEvidenceHeader}>
+        <div>
+          <span><ClipboardList size={17} /></span>
+          <div>
+            <small>岗位证据地图</small>
+            <h2 id="job-evidence-title">{resume.targetName}{brief?.focusName ? ` · ${brief.focusName}` : ""}</h2>
+          </div>
+        </div>
+        <button ref={editButtonRef} type="button" onClick={onEdit}><Pencil size={14} /> {brief ? "编辑岗位依据" : "添加目标岗位"}</button>
+      </div>
+
+      {!brief && (
+        <div className={styles.jobEvidenceEmpty}>
+          <Target size={19} />
+          <div><strong>先补充目标岗位</strong><p>岗位名称和 JD 会帮助确定写作重点，并辅助你选择更合适的版式。</p></div>
+        </div>
+      )}
+
+      {brief && !brief.requirementsText && (
+        <div className={styles.jobEvidenceEmpty}>
+          <FileText size={19} />
+          <div><strong>岗位已保存，下一步补充 JD</strong><p>粘贴单个岗位描述后，系统会优先提取最多 12 项要求并寻找你的真实证据；链接只做来源记录，不会自动访问。</p></div>
+          <button type="button" onClick={onEdit}>补充岗位描述</button>
+        </div>
+      )}
+
+      {brief && brief.requirementsText && jobFit && (
+        <>
+          <div className={styles.jobEvidenceMeta}>
+            <span><ShieldCheck size={14} /> 文字证据：{jobFit.supportedCount} 项直接支持 · {jobFit.partialCount} 项有线索 · {jobFit.missingCount} 项待补</span>
+            <span><ListChecks size={14} /> 已分析 {jobFit.totalRequirements} 项（最多 12 项）</span>
+            <span><CalendarClock size={14} /> 用户记录于 {capturedDate}</span>
+            {brief.sourceUrl ? (
+              <a href={brief.sourceUrl} target="_blank" rel="noreferrer"><Link2 size={13} /> {targetBriefSourceLabels[brief.sourceType]}</a>
+            ) : <span>{targetBriefSourceLabels[brief.sourceType]}</span>}
+          </div>
+          <div className={styles.jobRequirementList}>
+            {jobFit.items.map((item) => (
+              <details key={item.id}>
+                <summary>
+                  <span className={styles[`evidence_${item.status}`]}>{item.status === "supported" ? "有证据" : item.status === "partial" ? "有线索" : "待补充"}</span>
+                  <strong>{item.requirement}</strong>
+                  <ChevronDown size={14} />
+                </summary>
+                <div>
+                  {item.evidence.length ? (
+                    <div className={styles.evidenceQuotes}>
+                      {item.evidence.map((evidence, index) => (
+                        <button
+                          type="button"
+                          key={`${evidence.section}-${index}`}
+                          onClick={() => onOpenSection(evidence.section === "skills" || evidence.section === "languages" || evidence.section === "awards" ? "extras" : evidence.section)}
+                        >
+                          <span>{evidence.label}</span>
+                          <q>{evidence.text}</q>
+                        </button>
+                      ))}
+                    </div>
+                  ) : <p className={styles.noEvidence}>当前简历没有找到可引用的原文证据。</p>}
+                  <p className={styles.writingAction}><WandSparkles size={14} /> {item.action}</p>
+                </div>
+              </details>
+            ))}
+          </div>
+          {jobFit.totalRequirements === 0 && <p className={styles.noEvidence}>没有从这段文字中识别出明确的职责或能力要求，请粘贴包含职责、任职资格或具体技能的岗位描述。</p>}
+          <p className={styles.jobEvidenceCaveat}>这不是录用率或官方匹配分。系统最多优先提取 12 项要求；要求来自你保存的岗位材料，证据只引用你的简历原文，岗位变化请回到原页面核对。</p>
+        </>
+      )}
+    </section>
+  );
+}
+
+function TargetBriefDialog({
+  resume,
+  onClose,
+  returnFocusRef,
+  onSaved,
+  onCleared,
+}: {
+  resume: ResumeRecord;
+  onClose: () => void;
+  returnFocusRef: RefObject<HTMLButtonElement | null>;
+  onSaved: (brief: TargetBrief) => void;
+  onCleared: () => void;
+}) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const [focusName, setFocusName] = useState(resume.targetBrief?.focusName ?? "");
+  const [requirementsText, setRequirementsText] = useState(resume.targetBrief?.requirementsText ?? "");
+  const [sourceType, setSourceType] = useState<TargetBriefSource>(resume.targetBrief?.sourceType ?? "manual");
+  const [sourceUrl, setSourceUrl] = useState(resume.targetBrief?.sourceUrl ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [expectedRevision, setExpectedRevision] = useState(resume.targetBrief?.revision ?? 0);
+  const [conflict, setConflict] = useState(false);
+  const savingRef = useRef(false);
+  const saveButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const fallbackFocus = returnFocusRef.current;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.setTimeout(() => closeRef.current?.focus(), 0);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !savingRef.current) onClose();
+      if (event.key !== "Tab" || !dialogRef.current) return;
+      const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [href]'
+      ));
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", onKeyDown);
+      window.setTimeout(() => {
+        const focusTarget = fallbackFocus?.isConnected ? fallbackFocus : opener?.isConnected ? opener : null;
+        focusTarget?.focus();
+      }, 0);
+    };
+  }, [onClose, returnFocusRef]);
+
+  async function saveBrief() {
+    if (!focusName.trim()) return setError("请填写目标岗位");
+    savingRef.current = true;
+    setSaving(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/resumes/${resume.id}/target-brief`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          expectedRevision,
+          focusName,
+          requirementsText,
+          sourceType,
+          sourceUrl,
+        }),
+      });
+      const result = await response.json() as {
+        targetBrief?: TargetBrief;
+        error?: { message?: string; details?: { currentRevision?: number } };
+      };
+      if (response.status === 409 && typeof result.error?.details?.currentRevision === "number") {
+        setExpectedRevision(result.error.details.currentRevision);
+        setConflict(true);
+        setError("检测到另一页面的更新。当前输入仍保留；再次点击“确认覆盖”将以这份输入为准。");
+        savingRef.current = false;
+        setSaving(false);
+        window.requestAnimationFrame(() => saveButtonRef.current?.focus());
+        return;
+      }
+      if (!response.ok || !result.targetBrief) throw new Error(result.error?.message ?? "岗位依据保存失败");
+      onSaved(result.targetBrief);
+    } catch (reason) {
+      setError((reason as Error).message);
+      savingRef.current = false;
+      setSaving(false);
+    }
+  }
+
+  async function clearBrief() {
+    if (!resume.targetBrief || !window.confirm("清除后，岗位名称、JD 和来源记录都将从这份简历中删除。继续吗？")) return;
+    savingRef.current = true;
+    setSaving(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/resumes/${resume.id}/target-brief`, {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ expectedRevision }),
+      });
+      if (!response.ok) {
+        const result = await response.json() as { error?: { message?: string; details?: { currentRevision?: number } } };
+        if (response.status === 409 && typeof result.error?.details?.currentRevision === "number") {
+          setExpectedRevision(result.error.details.currentRevision);
+          setConflict(true);
+          throw new Error("岗位资料已在另一页面更新。当前输入仍保留；再次保存会覆盖更新版，再次清除会删除更新版，请明确确认后继续。");
+        }
+        throw new Error(result.error?.message ?? "岗位依据清除失败");
+      }
+      onCleared();
+    } catch (reason) {
+      setError((reason as Error).message);
+      savingRef.current = false;
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className={styles.briefBackdrop} onMouseDown={(event) => { if (!savingRef.current && event.target === event.currentTarget) onClose(); }}>
+      <div ref={dialogRef} className={styles.briefDialog} role="dialog" aria-modal="true" aria-labelledby="brief-dialog-title">
+        <div className={styles.briefDialogHeader}>
+          <div><span><ClipboardList size={18} /></span><div><small>{resume.targetName}</small><h2 id="brief-dialog-title">岗位依据</h2></div></div>
+          <button ref={closeRef} type="button" disabled={saving} onClick={onClose} aria-label="关闭岗位依据"><X size={20} /></button>
+        </div>
+        <div className={styles.briefDialogBody}>
+          <label><span>目标岗位</span><input disabled={saving} value={focusName} onChange={(event) => setFocusName(event.target.value)} maxLength={160} placeholder="例如：后端开发工程师" /></label>
+          <label><span>岗位描述 <small>{requirementsText.length} / 12000</small></span><textarea disabled={saving} value={requirementsText} onChange={(event) => setRequirementsText(event.target.value)} maxLength={12000} rows={12} placeholder="粘贴这一个岗位的职责与任职要求。系统不会自动访问或批量抓取招聘网站。" /></label>
+          <div className={styles.briefSourceGrid}>
+            <label><span>来源</span><select disabled={saving} value={sourceType} onChange={(event) => setSourceType(event.target.value as TargetBriefSource)}>
+              <option value="employer-official">企业官方招聘页（用户提供，未核验）</option>
+              <option value="boss">BOSS直聘（用户提供，未核验）</option>
+              <option value="zhaopin">智联招聘（用户提供，未核验）</option>
+              <option value="other-platform">其他招聘渠道（用户提供，未核验）</option>
+              <option value="manual">我自行整理（未核验）</option>
+            </select></label>
+            <label><span>来源链接（可选）</span><input disabled={saving} value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} inputMode="url" placeholder="https://…" /></label>
+          </div>
+          <div className={styles.briefPrivacy}><ShieldCheck size={17} /><p>岗位文本只用于这份简历的证据分析，不进入公共岗位库，也不会被本平台用于训练。来源链接仅保存供你核对，服务端不会自动访问。</p></div>
+          {error && <p className={styles.briefError} role="alert">{error}</p>}
+        </div>
+        <div className={styles.briefDialogFooter}>
+          <span>保存后将立即生成基础证据地图；缺少证据时只会追问，不会编造。</span>
+          <div>
+            {resume.targetBrief && <button className={styles.clearBrief} type="button" disabled={saving} onClick={() => void clearBrief()}><Trash2 size={14} /> 清除岗位资料</button>}
+            <button ref={saveButtonRef} className="button button-primary" type="button" disabled={saving || !focusName.trim()} onClick={() => void saveBrief()}>{saving ? <><LoaderCircle className={styles.spin} size={16} /> 保存中</> : <>{conflict ? "确认覆盖" : "保存并分析"} <Sparkles size={16} /></>}</button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 

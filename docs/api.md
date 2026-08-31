@@ -36,7 +36,8 @@
   "track": "career",
   "targetProfileId": "tencent",
   "templateId": "summit",
-  "title": "腾讯 · 产品经理 CV"
+  "title": "腾讯 · 产品经理",
+  "targetBrief": { "focusName": "产品经理" }
 }
 ```
 
@@ -51,6 +52,26 @@
 ```
 
 修订冲突返回 `409` 和当前修订号。
+
+## 岗位 / 项目依据
+
+- `GET /api/resumes/:id/target-brief`
+- `PUT /api/resumes/:id/target-brief`
+- `DELETE /api/resumes/:id/target-brief`（要求独立 `expectedRevision`，硬删除岗位文本和来源记录，不影响简历正文）
+
+```json
+{
+  "expectedRevision": 1,
+  "focusName": "产品经理",
+  "requirementsText": "岗位职责……任职要求……",
+  "sourceType": "employer-official",
+  "sourceUrl": "https://careers.example.com/job/123"
+}
+```
+
+依据拥有独立修订号；首次创建使用 `expectedRevision: 0`。`sourceType` 可为 `employer-official`、`boss`、`zhaopin`、`other-platform` 或 `manual`，链接只允许 HTTP(S)。保存链接只用于用户核对，服务端不会主动抓取。岗位描述上限为 12,000 字符且不超过 30 KB。
+
+求职编辑器在本地根据已保存 JD 生成可解释证据地图，不返回录用率或胜任力分数。系统按原文顺序优先提取最多 12 项职责或能力要求；每条证据逐字引用简历正文，没有证据时只提示补充真实事实。
 
 ## 建议
 
@@ -68,7 +89,7 @@
 
 `resumeId` 必填，并且必须属于当前已有访客会话；可同时提交尚未自动保存的当前 `content`，服务端仍会先校验简历所有权。无会话、跨会话或只有任意正文的请求不能触发建议。
 
-`POST` 响应包含 `score`、`suggestions`、`keywords`、`rewrite`、`provider` 和事实策略。默认提供者为 `local-rules`；只有环境已配置且请求显式设置 `allowExternalModel: true` 时，才调用服务端 OpenAI Responses API。模型失败会返回基础分析并标明透明降级。基础建议本身也受会话、散列网络标识与全局用量上限约束，避免匿名写入或计算被无界消耗。
+`POST` 响应包含 `score`、`suggestions`、`keywords`、`rewrite`、`provider` 和事实策略。默认提供者为 `local-rules`；只有环境已配置且请求显式设置 `allowExternalModel: true` 时，才调用服务端 OpenAI Responses API。若简历保存了岗位依据，规则与模型建议都会使用岗位要求；模型只接收从 JD 优先提取的最多 12 项要求，不接收原始整段 JD 或来源 URL，所有送模自由文本还会先移除常见招聘联系方式。模型失败会返回基础分析并标明透明降级。基础建议本身也受会话、散列网络标识与全局用量上限约束，避免匿名写入或计算被无界消耗。
 
 外部模型正文上限为 60 KB；单条 D1 条件插入会同时检查会话、散列网络标识与全局小时/日配额，避免多维配额部分扣减。每个会话最多一个活动模型请求，全站最多 4 路；客户端断开会取消上游请求。网络、超时、429 或 5xx 连续三次会开启 10 分钟供应商熔断；内容拒答、普通 4xx 和输出校验失败只影响当前请求。每次外部调用前持久化同意版本、用途、简历 ID 和时间，但不把 CV 正文写入同意或用量表。
 
