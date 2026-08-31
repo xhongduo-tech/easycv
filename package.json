@@ -17,7 +17,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "verify": "npm run typecheck && npm run lint && npm test && npm run build",
+    "verify": "npm run typecheck && npm run lint && npm test && npm run build && node scripts/verify-production-artifact.mjs",
     "verify:release": "npm run db:migrate:local && npm run db:verify && npm run verify"
   },
   "dependencies": {
