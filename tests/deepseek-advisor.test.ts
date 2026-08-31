@@ -1,10 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createDeepSeekAdvice,
+  DEEPSEEK_INPUT_TOKEN_UPPER_BOUND,
   getDeepSeekAdvisorConfig,
+  isDeepSeekAdviceRequestWithinInputBudget,
+  prepareDeepSeekAdviceRequest,
   shouldTripDeepSeekCircuit,
 } from "@/lib/deepseek-advisor";
 import { createStarterContent } from "@/lib/sample-data";
+import { resumeContentSchema } from "@/lib/validation";
 
 const config = {
   apiKey: "secret",
@@ -211,6 +215,52 @@ describe("DeepSeek resume advisor adapter", () => {
     }, config, fetcher as typeof fetch);
   });
 
+  it("blocks a redaction-expanded, duplicated prompt before the provider call", async () => {
+    const content = createStarterContent("career");
+    const repeatedShortEmail = "a@b.co ".repeat(110).trim();
+    const baseExperience = content.experience[0];
+    content.summary = "";
+    content.education = [];
+    content.projects = [];
+    content.skills = [];
+    content.languages = [];
+    content.awards = [];
+    content.experience = Array.from({ length: 12 }, (_, index) => ({
+      ...baseExperience,
+      id: `exp-${index}`,
+      bullets: [repeatedShortEmail],
+    }));
+    const input = {
+      content,
+      track: "career" as const,
+      targetName: "目标企业",
+      section: "overview" as const,
+    };
+    const flashConfig = { ...config, model: "deepseek-v4-flash" };
+    const rawInputBytes = new TextEncoder().encode(JSON.stringify({ content })).byteLength;
+    const prepared = prepareDeepSeekAdviceRequest(input, flashConfig);
+    const fetcher = vi.fn();
+    const providerBody = JSON.parse(prepared.body) as {
+      input: Array<{ content: Array<{ text: string }> }>;
+    };
+    const providerInput = JSON.parse(providerBody.input[0].content[0].text) as {
+      rewriteTask: { targets: unknown[] };
+    };
+
+    expect(resumeContentSchema.safeParse(content).success).toBe(true);
+    expect(rawInputBytes).toBeLessThanOrEqual(32_000);
+    expect(providerInput.rewriteTask.targets).toHaveLength(12);
+    expect(prepared.inputTokenUpperBound).toBeGreaterThan(DEEPSEEK_INPUT_TOKEN_UPPER_BOUND);
+    expect(isDeepSeekAdviceRequestWithinInputBudget(prepared)).toBe(false);
+    await expect(createDeepSeekAdvice(
+      input,
+      flashConfig,
+      fetcher as typeof fetch,
+      prepared,
+    )).rejects.toMatchObject({ kind: "input-too-large" });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it("returns only a grounded proposal for the selected requirement and source", async () => {
     const content = createStarterContent("career");
     content.experience[0].bullets = ["主要负责使用 SQL 分析用户数据"];
@@ -371,6 +421,35 @@ describe("DeepSeek resume advisor adapter", () => {
     }, config, vi.fn(async () => new Response("", { status: 401 })) as typeof fetch);
     const error = await request.catch((reason: unknown) => reason);
     expect(error).toMatchObject({ name: "DeepSeekAdvisorError", kind: "configuration" });
+    expect(shouldTripDeepSeekCircuit(error)).toBe(true);
+  });
+
+  it("fails closed when provider usage exceeds the reserved prompt budget", async () => {
+    const input = {
+      content: createStarterContent("career"),
+      track: "career" as const,
+      targetName: "目标企业",
+      section: "experience" as const,
+    };
+    const prepared = prepareDeepSeekAdviceRequest(input, config);
+    const request = createDeepSeekAdvice(input, config, vi.fn(async () => new Response(JSON.stringify({
+      status: "completed",
+      usage: {
+        input_tokens: prepared.inputTokenUpperBound + 1,
+        output_tokens: 100,
+        input_tokens_details: { cached_tokens: 0 },
+      },
+      output: [{
+        type: "message",
+        content: [{ type: "output_text", text: "{}" }],
+      }],
+    }), { status: 200 })) as typeof fetch, prepared);
+    const error = await request.catch((reason: unknown) => reason);
+
+    expect(error).toMatchObject({
+      kind: "configuration",
+      usage: { inputTokens: prepared.inputTokenUpperBound + 1 },
+    });
     expect(shouldTripDeepSeekCircuit(error)).toBe(true);
   });
 
