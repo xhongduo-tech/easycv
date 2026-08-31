@@ -10,17 +10,19 @@ import {
 import { createAdvice } from "@/lib/advisor";
 import { apiError, parseRequest, rejectCrossOrigin, withApiError } from "@/lib/api";
 import { mapResume, mapTarget, mapTargetBrief, type ResumeRow, type TargetBriefRow, type TargetRow } from "@/lib/db-mappers";
+import { analyzeJobFit } from "@/lib/job-fit";
 import {
   createOpenAIAdvice,
   getOpenAIAdvisorConfig,
   shouldResetOpenAICircuit,
   shouldTripOpenAICircuit,
 } from "@/lib/openai-advisor";
+import { sameSourceRef, type RewriteFocus } from "@/lib/rewrite-proposals";
 import { recommendationRequestSchema } from "@/lib/validation";
 
 const MAX_MODEL_INPUT_BYTES = 60_000;
 const MODEL_CONCURRENCY = 4;
-const MODEL_CONSENT_VERSION = "resume-model-processing-v1";
+const MODEL_CONSENT_VERSION = "resume-model-processing-v2";
 
 type ModelFallbackReason = "input-too-large" | "rate-limit" | "concurrency" | "provider-error";
 
@@ -73,6 +75,20 @@ export async function POST(request: Request) {
       .bind(resume.id, session.userId)
       .first<TargetBriefRow>();
     const targetBrief = targetBriefRow ? mapTargetBrief(targetBriefRow) : undefined;
+    let rewriteFocus: RewriteFocus | undefined;
+    if (parsed.data.requirementId && parsed.data.sourceRef) {
+      if (!targetBrief?.requirementsText) {
+        return withSessionCookie(apiError(400, "VALIDATION_ERROR", "请先保存目标岗位要求，再针对具体证据生成改写"), session);
+      }
+      const requirement = analyzeJobFit(content, targetBrief).items.find((item) => item.id === parsed.data.requirementId);
+      const evidenceMatches = requirement?.evidence.some((evidence) => (
+        evidence.sourceRef && sameSourceRef(evidence.sourceRef, parsed.data.sourceRef!)
+      ));
+      if (!requirement || !evidenceMatches) {
+        return withSessionCookie(apiError(400, "VALIDATION_ERROR", "所选原文已不再对应这条岗位要求，请重新查看证据地图"), session);
+      }
+      rewriteFocus = { requirementId: requirement.id, sourceRef: parsed.data.sourceRef };
+    }
     const networkHash = await getRequestNetworkHash(request);
     if (!await reserveAdviceQuota(db, session.userId, networkHash)) {
       return withSessionCookie(apiError(429, "RATE_LIMITED", "建议请求过于频繁，请稍后再试"), session);
@@ -82,7 +98,7 @@ export async function POST(request: Request) {
     let provider = "local-rules";
     let modelFallback = false;
     let fallbackReason: ModelFallbackReason | undefined;
-    let result = createAdvice(content, track, target, section, targetBrief);
+    let result = createAdvice(content, track, target, section, targetBrief, rewriteFocus);
 
     if (parsed.data.allowExternalModel && modelConfig) {
       const providerKey = `openai:${modelConfig.model}`;
@@ -134,6 +150,7 @@ export async function POST(request: Request) {
                     target,
                     targetBrief,
                     section,
+                    rewriteFocus,
                     signal: request.signal,
                   }, modelConfig);
                   provider = providerKey;
@@ -180,6 +197,8 @@ export async function POST(request: Request) {
       modelAvailable: Boolean(modelConfig),
       modelFallback,
       fallbackReason,
+      baseResumeRevision: resume.revision,
+      baseBriefRevision: targetBrief?.revision ?? 0,
       factPolicy: "建议不会自动改写；所有事实和数字都需由你核实",
     }), session);
   } catch (error) {

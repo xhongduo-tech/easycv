@@ -1,5 +1,6 @@
 import { analyzeJobFit } from "@/lib/job-fit";
-import type { AdvisorResult, ResumeContent, TargetBrief, TargetProfile, Track } from "@/types/resume";
+import { createLocalRewriteProposals, type RewriteFocus } from "@/lib/rewrite-proposals";
+import type { AdvisorResult, AdvisorSection, ResumeContent, TargetBrief, TargetProfile, Track } from "@/types/resume";
 
 const metricPattern = /\d+(?:\.\d+)?\s*(?:%|名|人|次|万|千|周|月|项|篇|家|个|小时|天|倍|\+)/;
 
@@ -7,8 +8,9 @@ export function createAdvice(
   content: ResumeContent,
   track: Track,
   target?: TargetProfile,
-  section = "overview",
+  section: AdvisorSection = "overview",
   targetBrief?: TargetBrief,
+  rewriteFocus?: RewriteFocus,
 ): AdvisorResult {
   const targetLabel = target?.name ?? (track === "study" ? "目标院校" : "目标企业");
   const overviewBullets = [
@@ -152,6 +154,7 @@ export function createAdvice(
     suggestions: suggestions.slice(0, 4),
     keywords: keywordPool,
     rewrite,
+    rewriteProposals: createLocalRewriteProposals(content, section, jobFit, rewriteFocus),
   };
 }
 

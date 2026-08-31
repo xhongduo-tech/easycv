@@ -106,26 +106,50 @@ export function redactJobDescriptionForModel(text: string) {
 
 function collectEvidence(content: ResumeContent): Evidence[] {
   const items: Evidence[] = [];
-  const push = (section: Evidence["section"], label: string, text: string, direct = false) => {
+  const push = (
+    section: Evidence["section"],
+    label: string,
+    text: string,
+    direct = false,
+    sourceRef?: Evidence["sourceRef"],
+  ) => {
     const value = text.trim();
-    if (value) items.push({ section, label, text: value, direct });
+    if (value) items.push({ section, label, text: value, direct, sourceRef });
   };
   push("basics", "职业标题", content.basics.headline);
-  push("summary", "个人简介", content.summary);
+  push("summary", "个人简介", content.summary, false, { section: "summary", field: "summary" });
   for (const entry of content.education) {
     push("education", entry.school || "教育经历", [entry.school, entry.degree, entry.major].filter(Boolean).join(" · "), true);
     push("education", entry.school || "教育经历", entry.score, true);
-    for (const text of entry.highlights) push("education", entry.school || "教育经历", text, hasResultEvidence(text));
+    entry.highlights.forEach((text, index) => push(
+      "education",
+      entry.school || "教育经历",
+      text,
+      hasResultEvidence(text),
+      { section: "education", field: "highlights", itemId: entry.id, index },
+    ));
   }
   for (const entry of content.experience) {
     const label = [entry.organization, entry.role].filter(Boolean).join(" · ") || "工作与实践";
     push("experience", label, [entry.role, entry.organization].filter(Boolean).join(" · "), true);
-    for (const text of entry.bullets) push("experience", label, text, hasResultEvidence(text));
+    entry.bullets.forEach((text, index) => push(
+      "experience",
+      label,
+      text,
+      hasResultEvidence(text),
+      { section: "experience", field: "bullets", itemId: entry.id, index },
+    ));
   }
   for (const entry of content.projects) {
     const label = entry.name || "项目经历";
     push("projects", label, [entry.name, entry.role].filter(Boolean).join(" · "), true);
-    for (const text of entry.bullets) push("projects", label, text, hasResultEvidence(text));
+    entry.bullets.forEach((text, index) => push(
+      "projects",
+      label,
+      text,
+      hasResultEvidence(text),
+      { section: "projects", field: "bullets", itemId: entry.id, index },
+    ));
   }
   for (const text of content.skills) push("skills", "技能", text);
   for (const text of content.languages) push("languages", "语言", text, true);
@@ -172,7 +196,12 @@ function mapRequirement(requirement: string, evidence: Evidence[], index: number
     requirement,
     keywords,
     status,
-    evidence: selectedMatches.map(({ item }) => ({ section: item.section, label: item.label, text: item.text })),
+    evidence: selectedMatches.map(({ item }) => ({
+      section: item.section,
+      label: item.label,
+      text: item.text,
+      ...(item.sourceRef ? { sourceRef: item.sourceRef } : {}),
+    })),
     action,
   };
 }

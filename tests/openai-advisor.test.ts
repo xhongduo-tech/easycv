@@ -39,6 +39,7 @@ describe("OpenAI resume advisor adapter", () => {
               suggestions: [{ id: "scope", severity: "medium", title: "明确职责", detail: "说明个人负责的范围。" }],
               keywords: ["协作"],
               rewrite: "通过【真实方法】完成【真实任务】，结果待核实。",
+              rewriteProposals: [],
             }),
           }],
         }],
@@ -88,6 +89,7 @@ describe("OpenAI resume advisor adapter", () => {
               suggestions: [{ id: "focus", severity: "low", title: "保持聚焦", detail: "继续围绕目标岗位组织事实。" }],
               keywords: ["目标"],
               rewrite: "基于已提供事实继续精炼。",
+              rewriteProposals: [],
             }),
           }],
         }],
@@ -141,6 +143,7 @@ describe("OpenAI resume advisor adapter", () => {
               suggestions: [{ id: "evidence", severity: "medium", title: "补充证据", detail: "补充可核验的行动与结果。" }],
               keywords: ["SQL", "Python"],
               rewrite: "使用【真实方法】完成【真实任务】，结果待核实。",
+              rewriteProposals: [],
             }),
           }],
         }],
@@ -165,6 +168,75 @@ describe("OpenAI resume advisor adapter", () => {
       },
       section: "overview",
     }, { apiKey: "secret", model: "gpt-test" }, fetcher as typeof fetch);
+  });
+
+  it("returns only a grounded proposal for the selected requirement and source", async () => {
+    const content = createStarterContent("career");
+    content.experience[0].bullets = ["主要负责使用 SQL 分析用户数据"];
+    const sourceRef = { section: "experience" as const, field: "bullets" as const, itemId: "exp-1", index: 0 };
+    const targetBrief = {
+      resumeId: "resume-1",
+      kind: "career-job" as const,
+      focusName: "数据分析师",
+      requirementsText: "负责使用 SQL 完成用户数据分析",
+      sourceType: "manual" as const,
+      capturedAt: "2026-08-31T00:00:00.000Z",
+      revision: 1,
+      createdAt: "2026-08-31T00:00:00.000Z",
+      updatedAt: "2026-08-31T00:00:00.000Z",
+    };
+    const fetcher = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { input: Array<{ content: Array<{ text: string }> }> };
+      const submitted = JSON.parse(body.input[0].content[0].text) as {
+        rewriteTask: { focusRequirement: { id: string }; targets: Array<{ sourceRef: unknown; text: string }> };
+      };
+      expect(submitted.rewriteTask.focusRequirement.id).toBe("requirement-1");
+      expect(submitted.rewriteTask.targets).toEqual([{
+        sourceRef,
+        text: "主要负责使用 SQL 分析用户数据",
+        label: "某头部互联网公司 · 产品策略实习生",
+      }]);
+      return new Response(JSON.stringify({
+        output: [{
+          type: "message",
+          content: [{
+            type: "output_text",
+            text: JSON.stringify({
+              score: 82,
+              headline: "可以更直接地回应岗位要求",
+              suggestions: [{ id: "focus", severity: "low", title: "保留事实", detail: "不新增原文之外的结果。" }],
+              keywords: ["SQL"],
+              rewrite: "使用现有事实压缩表达。",
+              rewriteProposals: [{
+                sourceRef: { ...sourceRef, itemId: "exp-1", index: 0 },
+                originalText: "主要负责使用 SQL 分析用户数据",
+                draftText: "负责使用 SQL 分析用户数据",
+                rationale: ["删除冗余开头", "保留 SQL 与数据分析事实"],
+                missingFacts: [],
+                requirementId: "requirement-1",
+              }],
+            }),
+          }],
+        }],
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    });
+
+    const result = await createOpenAIAdvice({
+      content,
+      track: "career",
+      targetName: "目标企业",
+      targetBrief,
+      section: "experience",
+      rewriteFocus: { requirementId: "requirement-1", sourceRef },
+    }, { apiKey: "secret", model: "gpt-test" }, fetcher as typeof fetch);
+
+    expect(result.rewriteProposals).toHaveLength(1);
+    expect(result.rewriteProposals[0]).toMatchObject({
+      status: "ready",
+      requirementId: "requirement-1",
+      draftText: "负责使用 SQL 分析用户数据",
+    });
+    expect(result.rewriteProposals[0].evidence.some((item) => item.text === "主要负责使用 SQL 分析用户数据")).toBe(true);
   });
 
   it("propagates caller cancellation to the provider request", async () => {

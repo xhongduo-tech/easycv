@@ -83,15 +83,24 @@
 {
   "resumeId": "uuid",
   "section": "experience",
-  "allowExternalModel": false
+  "allowExternalModel": false,
+  "requirementId": "requirement-1",
+  "sourceRef": {
+    "section": "experience",
+    "field": "bullets",
+    "itemId": "exp-1",
+    "index": 0
+  }
 }
 ```
+
+`requirementId` 与 `sourceRef` 是可选但必须同时出现的逐条改写焦点。服务端会重新计算岗位证据地图，确认该原文确实属于这条岗位要求；定位过期、跨章节或不匹配时拒绝生成。只有个人简介、教育亮点、工作经历要点与项目要点可以直接改写，学校、企业、职位、学历、技能标签、语言和奖项只能作为证据，不能被模型改名。
 
 `GET /api/recommendations` 只返回当前环境是否已配置模型，不接收简历正文。
 
 `resumeId` 必填，并且必须属于当前已有访客会话；可同时提交尚未自动保存的当前 `content`，服务端仍会先校验简历所有权。无会话、跨会话或只有任意正文的请求不能触发建议。
 
-`POST` 响应包含 `score`、`suggestions`、`keywords`、`rewrite`、`provider` 和事实策略。默认提供者为 `local-rules`；只有环境已配置且请求显式设置 `allowExternalModel: true` 时，才调用服务端 OpenAI Responses API。若简历保存了岗位依据，规则与模型建议都会使用岗位要求；模型只接收从 JD 优先提取的最多 12 项要求，不接收原始整段 JD 或来源 URL，所有送模自由文本还会先移除常见招聘联系方式。模型失败会返回基础分析并标明透明降级。基础建议本身也受会话、散列网络标识与全局用量上限约束，避免匿名写入或计算被无界消耗。
+`POST` 响应包含 `suggestions`、`rewriteProposals`、`provider`、`baseResumeRevision`、`baseBriefRevision` 和事实策略。每条 proposal 包含稳定原文定位、当前原文、草稿、最多三条理由、待补事实、岗位要求和由服务端重新绑定的证据。草稿只有在原文仍完全一致、没有待补事实、没有占位符、没有新增数字或常见工具词时才可应用；应用是精确替换而不是追加。默认提供者为 `local-rules`；只有环境已配置且请求显式设置 `allowExternalModel: true` 时，才调用服务端 OpenAI Responses API。若简历保存了岗位依据，规则与模型建议都会使用岗位要求；模型只接收从 JD 优先提取的最多 12 项要求，不接收原始整段 JD 或来源 URL，所有送模自由文本还会先移除常见招聘联系方式。模型失败会返回基础分析并标明透明降级。基础建议本身也受会话、散列网络标识与全局用量上限约束，避免匿名写入或计算被无界消耗。
 
 外部模型正文上限为 60 KB；单条 D1 条件插入会同时检查会话、散列网络标识与全局小时/日配额，避免多维配额部分扣减。每个会话最多一个活动模型请求，全站最多 4 路；客户端断开会取消上游请求。网络、超时、429 或 5xx 连续三次会开启 10 分钟供应商熔断；内容拒答、普通 4xx 和输出校验失败只影响当前请求。每次外部调用前持久化同意版本、用途、简历 ID 和时间，但不把 CV 正文写入同意或用量表。
 

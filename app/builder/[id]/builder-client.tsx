@@ -45,6 +45,12 @@ import { Brand } from "@/components/brand";
 import { ResumePreview } from "@/components/resume-preview";
 import { recommendGrowthGaps } from "@/lib/growth-data";
 import { analyzeJobFit, extractRequirements, targetBriefSourceLabels } from "@/lib/job-fit";
+import {
+  applyRewriteProposal,
+  getTextAtSourceRef,
+  replaceTextAtSourceRef,
+  type RewriteFocus,
+} from "@/lib/rewrite-proposals";
 import { shortId } from "@/lib/utils";
 import { toStandaloneHtml } from "@/lib/web-resume";
 import type {
@@ -55,6 +61,8 @@ import type {
   ResumeContent,
   ResumeRecord,
   ResumeTemplate,
+  RewriteProposal,
+  RewriteSourceRef,
   TargetBrief,
   TargetBriefSource,
 } from "@/types/resume";
@@ -69,6 +77,15 @@ type AdviceResponse = AdvisorResult & {
   modelAvailable?: boolean;
   modelFallback?: boolean;
   fallbackReason?: "input-too-large" | "rate-limit" | "concurrency" | "provider-error";
+  baseResumeRevision?: number;
+  baseBriefRevision?: number;
+};
+
+type RewriteUndo = {
+  sourceRef: RewriteSourceRef;
+  previousText: string;
+  appliedText: string;
+  proposalId: string;
 };
 
 const mobileViews: MobileView[] = ["edit", "preview", "advice"];
@@ -104,8 +121,10 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
   const [modelAvailable, setModelAvailable] = useState(false);
   const [allowExternalModel, setAllowExternalModel] = useState(false);
   const [adviceSection, setAdviceSection] = useState<SectionId | null>(null);
-  const [undoContent, setUndoContent] = useState<ResumeContent | null>(null);
-  const [rewriteTargetId, setRewriteTargetId] = useState("");
+  const [adviceFocus, setAdviceFocus] = useState<RewriteFocus | null>(null);
+  const [rewriteUndo, setRewriteUndo] = useState<RewriteUndo | null>(null);
+  const [appliedProposalIds, setAppliedProposalIds] = useState<string[]>([]);
+  const [keptProposalIds, setKeptProposalIds] = useState<string[]>([]);
   const [mobileView, setMobileView] = useState<MobileView>("edit");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(initialExport);
@@ -120,6 +139,7 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
   const sidebarCloseRef = useRef<HTMLButtonElement>(null);
   const editorPanelRef = useRef<HTMLElement>(null);
   const editorHeadingRef = useRef<HTMLHeadingElement>(null);
+  const adviceResultRef = useRef<HTMLHeadingElement>(null);
   const briefTriggerRef = useRef<HTMLButtonElement>(null);
   const closeExport = useCallback(() => setExportOpen(false), []);
   const closeBrief = useCallback(() => setBriefOpen(false), []);
@@ -295,9 +315,11 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
     setAdviceLoading(false);
     setAdvice(null);
     setAdviceSection(null);
+    setAdviceFocus(null);
     setAdviceError("");
-    setUndoContent(null);
-    setRewriteTargetId("");
+    setRewriteUndo(null);
+    setAppliedProposalIds([]);
+    setKeptProposalIds([]);
   }, []);
 
   const updateResume = useCallback((updater: (current: ResumeRecord) => ResumeRecord) => {
@@ -356,12 +378,12 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
     window.requestAnimationFrame(() => document.getElementById(`builder-tab-${next}`)?.focus());
   }
 
-  async function requestAdvice() {
+  async function requestAdvice(rewriteFocus?: RewriteFocus) {
     if (!resume) return;
     adviceRequest.current?.abort();
     const controller = new AbortController();
     adviceRequest.current = controller;
-    const requestedSection = activeSection;
+    const requestedSection = rewriteFocus?.sourceRef.section ?? activeSection;
     setAdviceLoading(true);
     setAdviceError("");
     setMobileView("advice");
@@ -385,7 +407,11 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
           targetProfileId: resume.targetProfileId,
           targetName: resume.targetName,
           allowExternalModel: modelAvailable && allowExternalModel,
-          section: sectionMap[activeSection],
+          section: sectionMap[requestedSection],
+          ...(rewriteFocus ? {
+            requirementId: rewriteFocus.requirementId,
+            sourceRef: rewriteFocus.sourceRef,
+          } : {}),
         }),
       });
       const result = (await response.json()) as AdviceResponse & { error?: { message?: string } };
@@ -394,7 +420,10 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
       if (typeof result.modelAvailable === "boolean") setModelAvailable(result.modelAvailable);
       setAdvice(result);
       setAdviceSection(requestedSection);
-      setRewriteTargetId("");
+      setAdviceFocus(rewriteFocus ?? null);
+      setAppliedProposalIds([]);
+      setKeptProposalIds([]);
+      window.requestAnimationFrame(() => adviceResultRef.current?.focus());
     } catch (reason) {
       if ((reason as Error).name !== "AbortError" && adviceRequest.current === controller) {
         setAdviceError((reason as Error).message);
@@ -407,31 +436,49 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
     }
   }
 
-  function applyRewrite() {
-    if (!advice || !resume || adviceSection !== "experience") return;
-    if (resume.content.experience.length > 0 && rewriteTargetId) {
-      const previousContent = resume.content;
-      updateContent((content) => ({
-        ...content,
-        experience: content.experience.map((item) =>
-          item.id === rewriteTargetId ? { ...item, bullets: [...item.bullets, advice.rewrite] } : item,
-        ),
-      }));
-      setUndoContent(previousContent);
-      setActiveSection("experience");
-      setMobileView("edit");
-    } else {
-      setAdviceError(resume.content.experience.length
-        ? "请先选择要添加草稿的具体经历。"
-        : "请先添加一段工作或实践经历，再接受改写示例。");
+  function applyProposal(proposal: RewriteProposal) {
+    if (!resume || appliedProposalIds.includes(proposal.id)) return;
+    if (advice?.baseBriefRevision !== undefined && advice.baseBriefRevision !== (resume.targetBrief?.revision ?? 0)) {
+      setAdviceError("岗位要求已更新，请重新生成这条改写。");
+      return;
     }
+    const previousText = getTextAtSourceRef(resume.content, proposal.sourceRef);
+    const nextContent = applyRewriteProposal(resume.content, proposal);
+    if (!previousText || !nextContent) {
+      setAdviceError("原文或事实边界已发生变化，请重新生成后再应用。");
+      return;
+    }
+    changeSequence.current += 1;
+    setResume((current) => current ? { ...current, content: nextContent } : current);
+    setDirty(true);
+    setSaveState("idle");
+    setAdviceError("");
+    setRewriteUndo({ sourceRef: proposal.sourceRef, previousText, appliedText: proposal.draftText.trim(), proposalId: proposal.id });
+    setAppliedProposalIds((current) => [...current, proposal.id]);
+    setKeptProposalIds((current) => current.filter((id) => id !== proposal.id));
+    setActiveSection(proposal.sourceRef.section);
+    setMobileView("edit");
   }
 
   function undoRewrite() {
-    if (!undoContent) return;
-    const previous = undoContent;
-    setUndoContent(null);
-    updateContent(() => previous);
+    if (!rewriteUndo || !resume) return;
+    const restored = replaceTextAtSourceRef(
+      resume.content,
+      rewriteUndo.sourceRef,
+      rewriteUndo.appliedText,
+      rewriteUndo.previousText,
+    );
+    if (!restored) {
+      setRewriteUndo(null);
+      setAdviceError("这条内容已被再次编辑，无法自动撤销；请直接在正文中修改。");
+      return;
+    }
+    changeSequence.current += 1;
+    setResume((current) => current ? { ...current, content: restored } : current);
+    setDirty(true);
+    setSaveState("idle");
+    setAppliedProposalIds((current) => current.filter((id) => id !== rewriteUndo.proposalId));
+    setRewriteUndo(null);
   }
 
   if (loading) {
@@ -460,6 +507,7 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
   }
 
   const usingModel = advice ? advice.provider !== "local-rules" : modelAvailable && allowExternalModel;
+  const targetedAdvice = Boolean(adviceFocus);
 
   return (
     <main className={styles.builderPage}>
@@ -556,10 +604,10 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
             </button>
           </div>
 
-          {undoContent && (
+          {rewriteUndo && (
             <div className={styles.undoBanner} role="status">
-              <span>已把一条待核实草稿添加到所选经历。</span>
-              <button type="button" onClick={undoRewrite}>撤销添加</button>
+              <span>已精确替换所选原文，并进入自动保存。</span>
+              <button type="button" onClick={undoRewrite}>撤销这次替换</button>
             </div>
           )}
 
@@ -584,6 +632,10 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
                   editorPanelRef.current?.scrollTo({ top: 0, behavior: "auto" });
                   editorHeadingRef.current?.focus({ preventScroll: true });
                 });
+              }}
+              onRequestRewrite={(requirementId, sourceRef) => {
+                selectSection(sourceRef.section);
+                void requestAdvice({ requirementId, sourceRef });
               }}
             />
           )}
@@ -635,48 +687,82 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
               <button className="button button-primary" type="button" onClick={() => void requestAdvice()}><WandSparkles size={16} /> 优化当前内容</button>
             </div>
           )}
-          {adviceLoading && <div className={styles.adviceLoading}><LoaderCircle className={styles.spin} size={24} /><strong>正在分析当前内容</strong><span>只生成建议，不会修改你的简历。</span></div>}
+          {adviceLoading && <div className={styles.adviceLoading} role="status" aria-live="polite"><LoaderCircle className={styles.spin} size={24} /><strong>正在分析当前内容</strong><span>只生成建议，不会修改你的简历。</span></div>}
           {advice && !adviceLoading && (
             <div className={styles.adviceContent}>
-              <div className={styles.scoreCard}>
-                <div className={styles.scoreRing}><ListChecks size={19} /><span>内容检查</span></div>
-                <div><span>当前内容检查</span><strong>{advice.headline}</strong><small>{advice.provider === "local-rules" ? (advice.modelFallback && advice.fallbackReason ? modelFallbackLabels[advice.fallbackReason] : "当前使用基础分析；不会冒充大模型结果") : "模型建议需逐条核实"}</small></div>
+              <div className={styles.adviceResultHeader}>
+                <span>{targetedAdvice ? "本次针对的岗位要求" : "当前内容检查"}</span>
+                <h2 ref={adviceResultRef} tabIndex={-1}>{targetedAdvice ? advice.rewriteProposals.find((proposal) => proposal.requirement)?.requirement : advice.headline}</h2>
+                <small>{advice.provider === "local-rules" ? (advice.modelFallback && advice.fallbackReason ? modelFallbackLabels[advice.fallbackReason] : "当前使用基础分析；不会冒充大模型结果") : "OpenAI 生成草稿；应用前仍需逐条确认"}</small>
               </div>
-              <div className={styles.suggestionList}>
-                {advice.suggestions.map((item) => (
-                  <article key={item.id}>
-                    <span className={`${styles.severity} ${styles[item.severity]}`}>{item.severity === "high" ? "优先" : item.severity === "medium" ? "建议" : "优化"}</span>
-                    <h3>{item.title}</h3>
-                    <p>{item.detail}</p>
-                  </article>
-                ))}
-              </div>
-              <div className={styles.rewriteCard}>
-                <span><WandSparkles size={14} /> 改写草稿</span>
-                <p>{advice.rewrite}</p>
-                <div>
-                  {adviceSection === "experience" && (
-                    <label className={styles.rewriteTarget}>
-                      <span>添加到</span>
-                      <select value={rewriteTargetId} onChange={(event) => setRewriteTargetId(event.target.value)}>
-                        <option value="">选择具体经历</option>
-                        {resume.content.experience.map((item, index) => (
-                          <option value={item.id} key={item.id}>{item.role || item.organization || `经历 ${index + 1}`}</option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
-                  {adviceSection === "experience" && <button type="button" disabled={!rewriteTargetId} onClick={applyRewrite}>添加为待核实草稿</button>}
-                  <button type="button" onClick={() => setAdvice(null)}>保留原文</button>
+              {advice.rewriteProposals.length > 0 ? (
+                <div className={styles.rewriteProposalList}>
+                  {advice.rewriteProposals.map((proposal) => {
+                    const applied = appliedProposalIds.includes(proposal.id);
+                    const kept = keptProposalIds.includes(proposal.id);
+                    const blocked = proposal.status !== "ready" || proposal.missingFacts.length > 0;
+                    const reasonId = `rewrite-block-${proposal.id}`;
+                    return (
+                      <article className={styles.rewriteProposal} key={proposal.id}>
+                        <div className={styles.rewriteProposalTop}>
+                          <span><WandSparkles size={14} /> 逐条改写 · {proposal.generator === "model" ? "模型草稿" : "基础草稿"}</span>
+                          <small className={blocked ? styles.proposalNeedsFacts : styles.proposalReady}>{blocked ? "需补事实" : applied ? "已应用" : kept ? "已保留" : "可确认"}</small>
+                        </div>
+                        {proposal.requirement && <p className={styles.proposalRequirement}><Target size={13} /> {proposal.requirement}</p>}
+                        <div className={styles.rewriteComparison}>
+                          <div><span>当前原文</span><p>{proposal.originalText}</p></div>
+                          <div><span>改写草稿</span><p>{proposal.draftText}</p></div>
+                        </div>
+                        <div className={styles.proposalRationale}>
+                          <strong>为什么这样改</strong>
+                          <ul>{proposal.rationale.map((reason) => <li key={reason}>{reason}</li>)}</ul>
+                        </div>
+                        {proposal.evidence.length > 0 && (
+                          <details className={styles.proposalEvidence}>
+                            <summary>查看引用的简历证据（{proposal.evidence.length}）</summary>
+                            <div>{proposal.evidence.map((evidence, index) => <q key={`${evidence.section}-${index}`}>{evidence.label}：{evidence.text}</q>)}</div>
+                          </details>
+                        )}
+                        {proposal.missingFacts.length > 0 && (
+                          <div className={styles.proposalMissing} id={reasonId}>
+                            <strong><AlertTriangle size={13} /> 应用前还缺少</strong>
+                            <ul>{proposal.missingFacts.map((fact) => <li key={fact}>{fact}</li>)}</ul>
+                          </div>
+                        )}
+                        {blocked && proposal.missingFacts.length === 0 && <p className={styles.proposalBlockedNote} id={reasonId}>草稿包含待核实内容或未通过事实校验，不能直接写入简历。</p>}
+                        <div className={styles.proposalActions}>
+                          <button type="button" disabled={blocked || applied || kept} aria-describedby={blocked ? reasonId : undefined} onClick={() => applyProposal(proposal)}>{applied ? "已应用" : "确认并替换原文"}</button>
+                          <button type="button" disabled={applied || kept} onClick={() => setKeptProposalIds((current) => [...current, proposal.id])}>{kept ? "已保留原文" : "保留原文"}</button>
+                        </div>
+                      </article>
+                    );
+                  })}
                 </div>
-                {adviceSection !== "experience" && <small>当前章节仅提供写作参考，不会写入工作经历。</small>}
-              </div>
-              <div className={styles.keywordBlock}>
+              ) : (
+                <div className={styles.rewriteCard}>
+                  <span><WandSparkles size={14} /> 写作框架</span>
+                  <p>{advice.rewrite}</p>
+                  <small>这只是写作参考，不会写入简历；先补充真实原文后才能生成可确认草稿。</small>
+                </div>
+              )}
+              <details className={styles.adviceMore} open={!targetedAdvice}>
+                <summary>其他检查建议（{advice.suggestions.length}）</summary>
+                <div className={styles.suggestionList}>
+                  {advice.suggestions.map((item) => (
+                    <article key={item.id}>
+                      <span className={`${styles.severity} ${styles[item.severity]}`}>{item.severity === "high" ? "优先" : item.severity === "medium" ? "建议" : "优化"}</span>
+                      <h3>{item.title}</h3>
+                      <p>{item.detail}</p>
+                    </article>
+                  ))}
+                </div>
+              </details>
+              {!targetedAdvice && <div className={styles.keywordBlock}>
                 <span>目标词汇</span>
                 <div>{advice.keywords.map((keyword) => <small key={keyword}>{keyword}</small>)}</div>
-              </div>
+              </div>}
               <p className={styles.factNote}><AlertCircle size={14} /> {advice.factPolicy}。请核实所有数字、成绩与经历事实。</p>
-              <button className={styles.refreshAdvice} type="button" onClick={() => void requestAdvice()}><RefreshCw size={14} /> 重新检查</button>
+              <button className={styles.refreshAdvice} type="button" onClick={() => void requestAdvice(adviceFocus ?? undefined)}><RefreshCw size={14} /> 重新检查</button>
             </div>
           )}
           {adviceError && <p className={styles.adviceError} role="alert">{adviceError}</p>}
@@ -718,12 +804,14 @@ function JobEvidenceCard({
   editButtonRef,
   onEdit,
   onOpenSection,
+  onRequestRewrite,
 }: {
   resume: ResumeRecord;
   jobFit?: ReturnType<typeof analyzeJobFit>;
   editButtonRef: RefObject<HTMLButtonElement | null>;
   onEdit: () => void;
   onOpenSection: (section: SectionId) => void;
+  onRequestRewrite: (requirementId: string, sourceRef: RewriteSourceRef) => void;
 }) {
   const brief = resume.targetBrief;
   const capturedDate = brief?.capturedAt ? new Date(brief.capturedAt).toLocaleDateString("zh-CN") : "";
@@ -777,14 +865,26 @@ function JobEvidenceCard({
                   {item.evidence.length ? (
                     <div className={styles.evidenceQuotes}>
                       {item.evidence.map((evidence, index) => (
-                        <button
-                          type="button"
-                          key={`${evidence.section}-${index}`}
-                          onClick={() => onOpenSection(evidence.section === "skills" || evidence.section === "languages" || evidence.section === "awards" ? "extras" : evidence.section)}
-                        >
-                          <span>{evidence.label}</span>
-                          <q>{evidence.text}</q>
-                        </button>
+                        <div className={styles.evidenceQuote} key={`${evidence.section}-${index}`}>
+                          <button
+                            type="button"
+                            onClick={() => onOpenSection(evidence.section === "skills" || evidence.section === "languages" || evidence.section === "awards" ? "extras" : evidence.section)}
+                            aria-label={`查看原文：${evidence.text.slice(0, 48)}`}
+                          >
+                            <span>{evidence.label}</span>
+                            <q>{evidence.text}</q>
+                          </button>
+                          {evidence.sourceRef && (
+                            <button
+                              className={styles.evidenceRewriteButton}
+                              type="button"
+                              onClick={() => onRequestRewrite(item.id, evidence.sourceRef!)}
+                              aria-label={`针对岗位要求“${item.requirement.slice(0, 48)}”生成这条原文的改写`}
+                            >
+                              <WandSparkles size={13} /> 针对这条改写
+                            </button>
+                          )}
+                        </div>
                       ))}
                     </div>
                   ) : <p className={styles.noEvidence}>当前简历没有找到可引用的原文证据。</p>}

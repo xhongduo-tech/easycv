@@ -78,8 +78,8 @@ export default function HomePage() {
           <div className={styles.coreGrid}>
             <article>
               <span><WandSparkles size={22} /></span>
-              <h3>先找到岗位证据</h3>
-              <p>把岗位要求逐条映射到你的经历原文，区分“有证据、有线索、待补充”，不把关键词命中伪装成录用概率。</p>
+              <h3>先找到证据，再逐条改写</h3>
+              <p>把岗位要求映射到你的经历原文，展示改写前后与修改理由；缺少事实时不生成可应用草稿。</p>
             </article>
             <article>
               <span><Target size={22} /></span>
@@ -102,7 +102,7 @@ export default function HomePage() {
             <h2>你提供经历，助手负责把它说清楚。</h2>
             <p>岗位要求决定“写什么”，专业版式决定“如何被快速读懂”。两者都必须落在你的真实材料上。</p>
             <ul>
-              <li><Check size={17} /> 每条岗位要求都能展开查看对应的简历原文</li>
+              <li><Check size={17} /> 每条改写同时展示岗位要求、简历原文与修改理由</li>
               <li><Check size={17} /> 缺少证据时先追问事实，不自动补数字或成果</li>
               <li><Check size={17} /> 你粘贴并确认岗位文字；链接只记录，不自动抓取</li>
             </ul>
@@ -117,7 +117,7 @@ export default function HomePage() {
             </div>
             <div className={styles.aiMessage}>
               <span><Sparkles size={15} /></span>
-              <div><small>找到一条用户证据</small><strong>“协调 3 位同学完成需求分析与上线”</strong><p>下一步补充指标口径和真实结果；如果没有可靠数字，就不写数字。</p></div>
+              <div><small>原文证据 → 可确认草稿</small><strong>“协调 3 位同学完成需求分析与上线”</strong><p>先说明为什么这样改；如果缺少指标口径或可靠结果，就不生成可直接应用的数字。</p></div>
             </div>
             <div className={styles.outputBar}>
               <span><FileText size={16} /> PDF</span>

@@ -14,6 +14,13 @@ export type TemplateDensity = "compact" | "balanced" | "spacious";
 export type TargetBriefKind = "career-job" | "study-program";
 export type TargetBriefSource = "employer-official" | "boss" | "zhaopin" | "other-platform" | "manual";
 export type EvidenceStatus = "supported" | "partial" | "missing";
+export type AdvisorSection = "overview" | "basics" | "summary" | "experience" | "education" | "projects" | "extras";
+export type NarrativeSection = "summary" | "education" | "experience" | "projects";
+export type RewriteSourceRef =
+  | { section: "summary"; field: "summary"; itemId?: never; index?: never }
+  | { section: "education"; field: "highlights"; itemId: string; index: number }
+  | { section: "experience"; field: "bullets"; itemId: string; index: number }
+  | { section: "projects"; field: "bullets"; itemId: string; index: number };
 
 export interface Basics {
   name: string;
@@ -105,6 +112,7 @@ export interface JobFitItem {
     section: "basics" | "summary" | "education" | "experience" | "projects" | "skills" | "languages" | "awards";
     label: string;
     text: string;
+    sourceRef?: RewriteSourceRef;
   }>;
   action: string;
 }
@@ -181,4 +189,20 @@ export interface AdvisorResult {
   }>;
   keywords: string[];
   rewrite: string;
+  rewriteProposals: RewriteProposal[];
+}
+
+export interface RewriteProposal {
+  id: string;
+  generator: "local-rules" | "model";
+  status: "ready" | "needs-facts";
+  sourceRef: RewriteSourceRef;
+  originalText: string;
+  draftText: string;
+  rationale: string[];
+  missingFacts: string[];
+  requirementId?: string;
+  requirement?: string;
+  requirementStatus?: EvidenceStatus;
+  evidence: JobFitItem["evidence"];
 }

@@ -600,7 +600,7 @@
 .jobRequirementList summary::-webkit-details-marker { display: none; }
 .jobRequirementList summary > svg { color: var(--muted); transition: transform 160ms ease; }
 .jobRequirementList details[open] summary > svg { transform: rotate(180deg); }
-.jobRequirementList summary strong { overflow: hidden; font-size: .62rem; font-weight: 680; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
+.jobRequirementList summary strong { display: -webkit-box; overflow: hidden; font-size: .62rem; font-weight: 680; line-height: 1.4; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 
 .jobRequirementList summary > span {
   padding: 4px 6px;
@@ -622,20 +622,48 @@
   gap: 6px;
 }
 
-.evidenceQuotes button {
+.evidenceQuote {
   display: grid;
-  gap: 4px;
-  padding: 9px 10px;
-  cursor: pointer;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
   border: 1px solid #dfdbd1;
   border-radius: 8px;
   background: white;
+}
+
+.evidenceQuote > button:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  padding: 9px 10px;
+  cursor: pointer;
+  border-radius: 8px 0 0 8px;
+  background: transparent;
   text-align: left;
 }
 
-.evidenceQuotes button:hover { border-color: #bfb5ed; }
+.evidenceQuote:hover { border-color: #bfb5ed; }
 .evidenceQuotes span { color: var(--brand); font-size: .5rem; font-weight: 720; }
 .evidenceQuotes q { color: var(--ink-soft); font-size: .56rem; line-height: 1.5; quotes: none; }
+
+.evidenceQuote .evidenceRewriteButton {
+  display: inline-flex;
+  min-width: 112px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 8px 10px;
+  cursor: pointer;
+  border-left: 1px solid #dfdbd1;
+  border-radius: 0 8px 8px 0;
+  color: var(--brand);
+  background: #fbfaff;
+  font-size: .52rem;
+  font-weight: 740;
+}
+
+.evidenceQuote .evidenceRewriteButton:hover,
+.evidenceQuote .evidenceRewriteButton:focus-visible { background: var(--brand-soft); }
 
 .writingAction,
 .noEvidence {
@@ -1203,6 +1231,20 @@
   padding-top: 16px;
 }
 
+.adviceResultHeader {
+  display: grid;
+  gap: 6px;
+  padding: 13px;
+  border-radius: 12px;
+  color: white;
+  background: var(--ink);
+}
+
+.adviceResultHeader > span,
+.adviceResultHeader > small { color: rgba(255, 255, 255, .62); font-size: .52rem; }
+.adviceResultHeader h2 { margin: 0; outline: 0; font-size: .7rem; line-height: 1.5; }
+.adviceResultHeader h2:focus-visible { box-shadow: 0 0 0 3px rgba(255, 255, 255, .28); }
+
 .scoreCard {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -1323,6 +1365,57 @@
   flex-wrap: wrap;
   gap: 6px;
 }
+
+.rewriteCard > small { color: var(--muted); font-size: .52rem; line-height: 1.45; }
+
+.rewriteProposalList { display: grid; gap: 10px; }
+
+.rewriteProposal {
+  display: grid;
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid #d8d0ff;
+  border-radius: 11px;
+  background: white;
+}
+
+.rewriteProposalTop { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.rewriteProposalTop > span { display: inline-flex; align-items: center; gap: 5px; color: var(--brand); font-size: .57rem; font-weight: 760; }
+.rewriteProposalTop > small { padding: 4px 6px; border-radius: 99px; font-size: .48rem; font-weight: 760; }
+.proposalReady { color: var(--success); background: var(--lime-soft); }
+.proposalNeedsFacts { color: var(--warning); background: #fff1d3; }
+
+.proposalRequirement { display: flex; align-items: flex-start; gap: 6px; padding: 8px 9px; margin: 0; border-radius: 8px; color: #4c397e; background: var(--brand-soft); font-size: .54rem; line-height: 1.45; }
+.proposalRequirement svg { flex: none; margin-top: 1px; }
+
+.rewriteComparison { display: grid; gap: 7px; }
+.rewriteComparison > div { padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-alt); }
+.rewriteComparison > div:last-child { border-color: #cfc3ff; background: #fbfaff; }
+.rewriteComparison span { color: var(--muted); font-size: .49rem; font-weight: 720; }
+.rewriteComparison p { margin: 5px 0 0; color: var(--ink-soft); font-size: .57rem; line-height: 1.55; }
+
+.proposalRationale strong,
+.proposalMissing strong { font-size: .53rem; }
+.proposalRationale ul,
+.proposalMissing ul { display: grid; gap: 4px; padding-left: 17px; margin: 6px 0 0; color: var(--muted); font-size: .52rem; line-height: 1.45; }
+
+.proposalEvidence { border: 1px solid var(--border); border-radius: 8px; background: var(--surface-alt); }
+.proposalEvidence summary { padding: 8px 9px; cursor: pointer; color: var(--ink-soft); font-size: .51rem; font-weight: 690; }
+.proposalEvidence > div { display: grid; gap: 5px; padding: 0 9px 9px; }
+.proposalEvidence q { color: var(--muted); font-size: .5rem; line-height: 1.45; quotes: none; }
+
+.proposalMissing { padding: 9px 10px; border-radius: 8px; color: var(--warning); background: #fff7e5; }
+.proposalMissing strong { display: flex; align-items: center; gap: 5px; }
+.proposalBlockedNote { padding: 8px 9px; margin: 0; border-radius: 8px; color: var(--warning); background: #fff7e5; font-size: .51rem; line-height: 1.45; }
+
+.proposalActions { display: flex; gap: 7px; }
+.proposalActions button { min-height: 34px; flex: 1; padding: 7px 8px; cursor: pointer; border: 1px solid var(--brand); border-radius: 7px; color: white; background: var(--brand); font-size: .53rem; font-weight: 720; }
+.proposalActions button:last-child { border-color: var(--border); color: var(--ink-soft); background: white; }
+.proposalActions button:disabled { cursor: not-allowed; opacity: .5; }
+
+.adviceMore { border: 1px solid var(--border); border-radius: 9px; background: white; }
+.adviceMore > summary { padding: 10px 11px; cursor: pointer; color: var(--ink-soft); font-size: .55rem; font-weight: 720; }
+.adviceMore > .suggestionList { padding: 0 9px 9px; }
 
 .rewriteCard button {
   padding: 7px 8px;
@@ -1726,6 +1819,10 @@
   .jobEvidenceEmpty > button { grid-column: 1 / -1; justify-content: center; }
   .jobRequirementList details > div { padding-left: 0; }
   .jobRequirementList summary strong { white-space: normal; }
+  .evidenceQuote { grid-template-columns: 1fr; }
+  .evidenceQuote .evidenceRewriteButton { min-width: 0; border-top: 1px solid #dfdbd1; border-left: 0; border-radius: 0 0 8px 8px; }
+  .proposalActions { flex-direction: column; }
+  .advicePanel { padding: 16px; }
   .briefBackdrop { padding: 0; }
   .briefDialog { width: 100%; max-height: 100vh; min-height: 100vh; border: 0; border-radius: 0; }
   .briefDialogBody input,

@@ -181,6 +181,28 @@ export const growthRecommendationRequestSchema = z
   })
   .strict();
 
+export const rewriteSourceRefSchema = z.discriminatedUnion("section", [
+  z.object({ section: z.literal("summary"), field: z.literal("summary") }).strict(),
+  z.object({
+    section: z.literal("education"),
+    field: z.literal("highlights"),
+    itemId: itemIdSchema,
+    index: z.number().int().min(0).max(29),
+  }).strict(),
+  z.object({
+    section: z.literal("experience"),
+    field: z.literal("bullets"),
+    itemId: itemIdSchema,
+    index: z.number().int().min(0).max(29),
+  }).strict(),
+  z.object({
+    section: z.literal("projects"),
+    field: z.literal("bullets"),
+    itemId: itemIdSchema,
+    index: z.number().int().min(0).max(29),
+  }).strict(),
+]);
+
 export const recommendationRequestSchema = z
   .object({
     resumeId: z.string().uuid("简历 ID 格式不正确"),
@@ -191,6 +213,8 @@ export const recommendationRequestSchema = z
     targetName: requiredText("目标名称", 240).optional(),
     allowExternalModel: z.boolean().default(false),
     section: z.enum(["overview", "basics", "summary", "experience", "education", "projects", "extras"]).default("overview"),
+    requirementId: z.string().trim().regex(/^requirement-\d+$/, "岗位要求 ID 格式不正确").optional(),
+    sourceRef: rewriteSourceRefSchema.optional(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -203,6 +227,20 @@ export const recommendationRequestSchema = z
         code: z.ZodIssueCode.custom,
         message: "targetProfileId 与 targetId 不能冲突",
         path: ["targetProfileId"],
+      });
+    }
+    if (Boolean(value.requirementId) !== Boolean(value.sourceRef)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "岗位要求与原文定位必须同时提供",
+        path: value.requirementId ? ["sourceRef"] : ["requirementId"],
+      });
+    }
+    if (value.sourceRef && value.section !== "overview" && value.section !== value.sourceRef.section) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "原文定位必须属于当前分析章节",
+        path: ["sourceRef", "section"],
       });
     }
   });

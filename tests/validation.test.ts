@@ -26,6 +26,24 @@ describe("recommendation contract", () => {
       section: "overview",
     }).success).toBe(true);
   });
+
+  it("requires a valid requirement and narrative source pair for targeted rewriting", () => {
+    const base = {
+      resumeId: "d9428888-122b-4f48-9f9e-5ab869503e6d",
+      section: "experience" as const,
+    };
+    expect(recommendationRequestSchema.safeParse({ ...base, requirementId: "requirement-1" }).success).toBe(false);
+    expect(recommendationRequestSchema.safeParse({
+      ...base,
+      requirementId: "requirement-1",
+      sourceRef: { section: "experience", field: "bullets", itemId: "exp-1", index: 0 },
+    }).success).toBe(true);
+    expect(recommendationRequestSchema.safeParse({
+      ...base,
+      requirementId: "requirement-1",
+      sourceRef: { section: "projects", field: "bullets", itemId: "project-1", index: 0 },
+    }).success).toBe(false);
+  });
 });
 
 describe("target brief contract", () => {
