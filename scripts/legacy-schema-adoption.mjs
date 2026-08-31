@@ -152,18 +152,7 @@ function refusal(reason, details = {}) {
   return { state: "refused", reason, ...details };
 }
 
-/**
- * Plans a metadata-only adoption. It never emits a plan unless the old schema
- * is logically identical to the post-0004 schema and the ledger is absent or
- * contains a valid migration-name prefix.
- */
-export async function planLegacySchemaAdoption(snapshot) {
-  const tableNames = [...new Set(snapshot.tableRows.map((row) => String(row.name)))]
-    .filter((name) => !isIgnoredD1SystemTable(name))
-    .sort();
-  const hasLedger = tableNames.includes("d1_migrations");
-  const applicationTables = tableNames.filter((name) => name !== "d1_migrations");
-
+async function planMigrationLedger(snapshot, hasLedger) {
   if (hasLedger) {
     const ledgerColumns = snapshot.columnRows
       .filter((row) => row.table_name === "d1_migrations")
@@ -186,15 +175,41 @@ export async function planLegacySchemaAdoption(snapshot) {
     }
   }
 
-  const appliedRows = [...snapshot.ledgerRows].sort((left, right) => Number(left.id) - Number(right.id));
+  const appliedRows = [...snapshot.ledgerRows]
+    .sort((left, right) => Number(left.id) - Number(right.id));
   const appliedNames = appliedRows.map((row) => String(row.name));
   const prefix = LEGACY_MIGRATIONS.slice(0, appliedNames.length);
   const validPrefix = appliedNames.length <= LEGACY_MIGRATIONS.length
     && isSameStringArray(appliedNames, prefix)
-    && appliedRows.every((row) => typeof row.applied_at === "string" && row.applied_at.length > 0);
+    && appliedRows.every(
+      (row) => typeof row.applied_at === "string" && row.applied_at.length > 0,
+    );
   if (!validPrefix) {
     return refusal("migration_ledger_is_not_a_valid_legacy_prefix", { appliedNames });
   }
+
+  const missingNames = LEGACY_MIGRATIONS.slice(appliedNames.length);
+  return {
+    state: missingNames.length > 0 ? "adoptable" : "already_baselined",
+    appliedNames,
+    missingNames,
+  };
+}
+
+/**
+ * Plans a metadata-only adoption. It never emits a plan unless the old schema
+ * is logically identical to the post-0004 schema and the ledger is absent or
+ * contains a valid migration-name prefix.
+ */
+export async function planLegacySchemaAdoption(snapshot) {
+  const tableNames = [...new Set(snapshot.tableRows.map((row) => String(row.name)))]
+    .filter((name) => !isIgnoredD1SystemTable(name))
+    .sort();
+  const hasLedger = tableNames.includes("d1_migrations");
+  const applicationTables = tableNames.filter((name) => name !== "d1_migrations");
+  const ledgerPlan = await planMigrationLedger(snapshot, hasLedger);
+  if (ledgerPlan.state === "refused") return ledgerPlan;
+  const { appliedNames } = ledgerPlan;
 
   if (applicationTables.length === 0) {
     if (appliedNames.length > 0) {
@@ -250,7 +265,7 @@ export async function planLegacySchemaAdoption(snapshot) {
     });
   }
 
-  const missingNames = LEGACY_MIGRATIONS.slice(appliedNames.length);
+  const { missingNames } = ledgerPlan;
   return {
     state: missingNames.length > 0 ? "adoptable" : "already_baselined",
     appliedNames,
@@ -389,8 +404,38 @@ export async function inspectLegacyD1(db) {
   };
 }
 
-async function replan(db) {
-  return planLegacySchemaAdoption(await inspectLegacyD1(db));
+async function inspectMigrationLedger(db) {
+  const [columnsResult, indexListResult, ledgerResult] = await db.batch([
+    db.prepare(`SELECT 'd1_migrations' AS table_name, c.cid, c.name, c.type,
+      c."notnull" AS "notnull", c.dflt_value, c.pk
+      FROM pragma_table_info('d1_migrations') AS c`),
+    db.prepare(`SELECT 'd1_migrations' AS table_name, il.name AS index_name,
+      il."unique" AS "unique", il.origin, il.partial
+      FROM pragma_index_list('d1_migrations') AS il`),
+    // SELECT * deliberately avoids assuming that a malformed ledger has the
+    // expected columns. Its shape is validated before any names are trusted.
+    db.prepare("SELECT * FROM d1_migrations"),
+  ]);
+  const columnRows = resultsOf(columnsResult);
+  const indexListRows = resultsOf(indexListResult);
+  const ledgerRows = resultsOf(ledgerResult);
+
+  // A valid ledger has exactly one UNIQUE(name) index. Refuse malformed or
+  // augmented ledgers without issuing an unbounded number of detail queries.
+  let indexRows = [];
+  if (indexListRows.length === 1) {
+    const detailQueries = buildIndexDetailQueries(indexListRows);
+    const detailResults = detailQueries.length > 0
+      ? await db.batch(detailQueries.map((sql) => db.prepare(sql)))
+      : [];
+    indexRows = detailResults.flatMap(resultsOf);
+  }
+
+  return { columnRows, indexRows, ledgerRows };
+}
+
+async function recheckMigrationLedger(db) {
+  return planMigrationLedger(await inspectMigrationLedger(db), true);
 }
 
 /**
@@ -398,26 +443,39 @@ async function replan(db) {
  * A lost response is safe: retrying re-reads the prefix and converges.
  */
 export async function adoptLegacyD1(db) {
-  const initial = await replan(db);
+  const initialSnapshot = await inspectLegacyD1(db);
+  const initial = await planLegacySchemaAdoption(initialSnapshot);
   if (initial.state !== "adoptable") return initial;
 
-  const hadLedger = (await inspectLegacyD1(db)).tableRows
+  const hadLedger = initialSnapshot.tableRows
     .some((row) => row.name === "d1_migrations");
+  let createError;
   if (!hadLedger) {
     try {
       await db.prepare(CREATE_MIGRATION_LEDGER_SQL).run();
     } catch (error) {
-      const afterCreateError = await replan(db);
-      if (afterCreateError.state !== "adoptable") throw error;
+      // The write may have committed even when its response was lost. Keep
+      // the error until a minimal ledger read proves that it is safe to carry
+      // on; no second full-schema inspection is needed.
+      createError = error;
     }
   }
 
-  const beforeInsert = await replan(db);
+  let beforeInsert;
+  try {
+    beforeInsert = await recheckMigrationLedger(db);
+  } catch (error) {
+    throw createError ?? error;
+  }
   if (beforeInsert.state === "already_baselined") {
     return { ...beforeInsert, state: "adopted" };
   }
-  if (beforeInsert.state !== "adoptable") return beforeInsert;
+  if (beforeInsert.state !== "adoptable") {
+    if (createError) throw createError;
+    return beforeInsert;
+  }
 
+  let insertError;
   if (beforeInsert.missingNames.length > 0) {
     try {
       await db
@@ -425,13 +483,15 @@ export async function adoptLegacyD1(db) {
         .bind(...beforeInsert.missingNames)
         .run();
     } catch (error) {
-      const afterInsertError = await replan(db);
-      if (afterInsertError.state !== "already_baselined") throw error;
+      // As with CREATE, verification below distinguishes a lost response from
+      // a write that did not converge.
+      insertError = error;
     }
   }
 
-  const verified = await replan(db);
+  const verified = await recheckMigrationLedger(db);
   if (verified.state !== "already_baselined") {
+    if (insertError) throw insertError;
     throw new Error(`Legacy D1 adoption verification failed: ${verified.state}`);
   }
   return { ...verified, state: "adopted" };

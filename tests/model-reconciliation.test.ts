@@ -41,6 +41,16 @@ describe("model reconciliation", () => {
     expect(result.staleAttempts).toHaveLength(4);
     expect(result.staleAttempts.map((attempt) => attempt.request_id))
       .not.toContain("00-inconsistent-stale");
+    expect(result.settledPendingDeliveries).toEqual({
+      total: 1,
+      samples: [{
+        request_id: "00-inconsistent-stale",
+        user_id: "user-1",
+        attempt_state: "prepared",
+        ledger_status: "consumed",
+        run_status: "succeeded",
+      }],
+    });
     // One recent consumed ledger lacks a cost; one released ledger has a
     // succeeded cost. The old missing cost is beyond the 90-day window.
     expect(result.ledgerRunMismatches).toBe(2);

@@ -43,7 +43,7 @@ npm run dev
 
 开发服务器会输出实际本地地址。`npm run dev` 的 `predev` 会先把 `drizzle/` 中尚未执行的迁移应用到本地 Miniflare D1；也可以单独运行 `npm run db:migrate:local`。早期版本已经由请求期初始化完成的本地数据库会被无损写入迁移台账，再继续执行后续迁移。
 
-生产数据库结构只由部署阶段随站点发布的 Drizzle 迁移创建或升级。请求期的 `ensureDatabase` 不执行 `CREATE` / `ALTER`，只用一次只读查询确认结构就绪，再检查目录版本并按需写入模板与目标目录种子；缺少迁移时会直接报告数据库未就绪，不会在用户请求中尝试修表。旧版线上 D1 如果已有业务表但缺少迁移台账，必须按 [Legacy D1 无损升级手册](docs/legacy-d1-upgrade.md) 使用严格指纹 bridge 收养，禁止直接猜测或补写后续迁移。
+生产数据库结构只由部署阶段随站点发布的 Drizzle 迁移创建或升级。请求期的 `ensureDatabase` 不执行 `CREATE` / `ALTER`，只用一次只读查询确认结构就绪，再检查目录版本并按需写入模板与目标目录种子；缺少迁移时会直接报告数据库未就绪，不会在用户请求中尝试修表。Sites 的 `__appgarden_migrations` 是标准平台台账；只有旧版线上 D1 确认连平台台账也不存在、但仍保有业务表时，才按 [Legacy D1 无损升级手册](docs/legacy-d1-upgrade.md) 使用严格指纹 bridge 收养，禁止直接猜测或补写后续迁移。
 
 ### 认证配置
 
