@@ -33,20 +33,22 @@ async function inspect() {
 }
 
 async function inspectPlatformMigrationLedger() {
-  const tables = await env.DB.prepare(`SELECT name FROM sqlite_schema
+  const tables = await env.DB.prepare(`SELECT name, sql FROM sqlite_schema
     WHERE type = 'table' AND name IN ('__appgarden_migrations', '_cf_KV')
     ORDER BY name`).all();
-  const tableNames = (tables.results ?? []).map((row) => String(row.name));
-  if (!tableNames.includes("__appgarden_migrations")) return { tableNames };
-  const [columns, rows] = await env.DB.batch([
-    env.DB.prepare("SELECT cid, name, type, notnull, dflt_value, pk FROM pragma_table_info('__appgarden_migrations') ORDER BY cid"),
-    env.DB.prepare("SELECT * FROM __appgarden_migrations LIMIT 50"),
-  ]);
-  return {
-    tableNames,
-    appgardenMigrationColumns: columns.results ?? [],
-    appgardenMigrationRows: rows.results ?? [],
-  };
+  const tableDefinitions = tables.results ?? [];
+  if (!tableDefinitions.some((row) => row.name === "__appgarden_migrations")) {
+    return { tableDefinitions };
+  }
+  try {
+    const rows = await env.DB.prepare("SELECT * FROM __appgarden_migrations LIMIT 50").all();
+    return { tableDefinitions, appgardenMigrationRows: rows.results ?? [] };
+  } catch (error) {
+    return {
+      tableDefinitions,
+      appgardenMigrationReadError: error instanceof Error ? error.message : "UnknownError",
+    };
+  }
 }
 
 export async function GET(request) {
