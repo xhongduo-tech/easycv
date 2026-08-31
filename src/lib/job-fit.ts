@@ -46,8 +46,8 @@ export const targetBriefSourceLabels: Record<TargetBriefSource, string> = {
   "employer-official": "企业官方招聘页（用户提供，未核验）",
   boss: "BOSS直聘（用户提供，未核验）",
   zhaopin: "智联招聘（用户提供，未核验）",
-  "other-platform": "其他招聘渠道（用户提供，未核验）",
-  manual: "用户自行整理（未核验）",
+  "other-platform": "招聘平台、内推或其他渠道（用户提供，未核验）",
+  manual: "用户确认的文字（未核验）",
 };
 
 export function analyzeJobFit(content: ResumeContent, brief: Pick<TargetBrief, "requirementsText">): JobFitResult {

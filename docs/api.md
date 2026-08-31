@@ -69,7 +69,9 @@
 }
 ```
 
-依据拥有独立修订号；首次创建使用 `expectedRevision: 0`。`sourceType` 可为 `employer-official`、`boss`、`zhaopin`、`other-platform` 或 `manual`，链接只允许 HTTP(S)。保存链接只用于用户核对，服务端不会主动抓取。岗位描述上限为 12,000 字符且不超过 30 KB。
+依据拥有独立修订号；首次创建使用 `expectedRevision: 0`。用户确认的 `requirementsText` 是唯一分析输入，来源链接只允许 HTTP(S)，仅用于用户核对，服务端不会打开链接、调用招聘平台 API 或抓取内容。岗位描述上限为 12,000 字符且不超过 30 KB。`sourceType` 当前写入 `employer-official`、`other-platform` 或 `manual`；接口继续接受 `boss`、`zhaopin` 仅用于兼容已有记录。
+
+当前版本不接收岗位截图。用户可在设备端完成文字识别后，将结果粘贴并核对；这样岗位分析仍有一份可修改、可确认的规范文本输入。
 
 求职编辑器在本地根据已保存 JD 生成可解释证据地图，不返回录用率或胜任力分数。系统按原文顺序优先提取最多 12 项职责或能力要求；每条证据逐字引用简历正文，没有证据时只提示补充真实事实。
 

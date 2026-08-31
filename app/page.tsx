@@ -104,7 +104,7 @@ export default function HomePage() {
             <ul>
               <li><Check size={17} /> 每条岗位要求都能展开查看对应的简历原文</li>
               <li><Check size={17} /> 缺少证据时先追问事实，不自动补数字或成果</li>
-              <li><Check size={17} /> BOSS、智联等链接仅作用户来源记录，不自动抓取</li>
+              <li><Check size={17} /> 你粘贴并确认岗位文字；链接只记录，不自动抓取</li>
             </ul>
             <Link className="button button-primary" href="/dashboard?new=1">开始制作 <ArrowRight size={17} /></Link>
           </div>

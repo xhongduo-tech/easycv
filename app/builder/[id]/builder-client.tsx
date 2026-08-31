@@ -44,7 +44,7 @@ import {
 import { Brand } from "@/components/brand";
 import { ResumePreview } from "@/components/resume-preview";
 import { recommendGrowthGaps } from "@/lib/growth-data";
-import { analyzeJobFit, targetBriefSourceLabels } from "@/lib/job-fit";
+import { analyzeJobFit, extractRequirements, targetBriefSourceLabels } from "@/lib/job-fit";
 import { shortId } from "@/lib/utils";
 import { toStandaloneHtml } from "@/lib/web-resume";
 import type {
@@ -814,18 +814,26 @@ function TargetBriefDialog({
   onSaved: (brief: TargetBrief) => void;
   onCleared: () => void;
 }) {
+  const conflictMessage = "检测到另一页面的更新。当前输入仍保留；再次点击“确认覆盖”将以这份输入为准。";
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const [focusName, setFocusName] = useState(resume.targetBrief?.focusName ?? "");
   const [requirementsText, setRequirementsText] = useState(resume.targetBrief?.requirementsText ?? "");
-  const [sourceType, setSourceType] = useState<TargetBriefSource>(resume.targetBrief?.sourceType ?? "manual");
+  const [sourceType, setSourceType] = useState<TargetBriefSource>(() => {
+    const stored = resume.targetBrief?.sourceType ?? "manual";
+    return stored === "boss" || stored === "zhaopin" ? "other-platform" : stored;
+  });
   const [sourceUrl, setSourceUrl] = useState(resume.targetBrief?.sourceUrl ?? "");
+  const [sourceDetailsOpen, setSourceDetailsOpen] = useState(Boolean(resume.targetBrief?.sourceUrl || (resume.targetBrief?.sourceType && resume.targetBrief.sourceType !== "manual")));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [expectedRevision, setExpectedRevision] = useState(resume.targetBrief?.revision ?? 0);
   const [conflict, setConflict] = useState(false);
   const savingRef = useRef(false);
   const saveButtonRef = useRef<HTMLButtonElement>(null);
+  const requirementPreview = useMemo(() => extractRequirements(requirementsText, 12), [requirementsText]);
+  const requirementBytes = useMemo(() => new TextEncoder().encode(requirementsText.trim()).byteLength, [requirementsText]);
+  const requirementsTooLarge = requirementBytes > 30_000;
 
   useEffect(() => {
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -863,6 +871,7 @@ function TargetBriefDialog({
 
   async function saveBrief() {
     if (!focusName.trim()) return setError("请填写目标岗位");
+    if (requirementsTooLarge) return setError("岗位文字超过 30 KB，请精简后再保存。建议只保留职责、任职要求和优先条件。");
     savingRef.current = true;
     setSaving(true);
     setError("");
@@ -885,7 +894,7 @@ function TargetBriefDialog({
       if (response.status === 409 && typeof result.error?.details?.currentRevision === "number") {
         setExpectedRevision(result.error.details.currentRevision);
         setConflict(true);
-        setError("检测到另一页面的更新。当前输入仍保留；再次点击“确认覆盖”将以这份输入为准。");
+        setError(conflictMessage);
         savingRef.current = false;
         setSaving(false);
         window.requestAnimationFrame(() => saveButtonRef.current?.focus());
@@ -897,6 +906,39 @@ function TargetBriefDialog({
       setError((reason as Error).message);
       savingRef.current = false;
       setSaving(false);
+    }
+  }
+
+  async function pasteRequirements() {
+    if (!navigator.clipboard?.readText) {
+      setError("当前浏览器不支持读取剪贴板，请使用 Ctrl/Command + V 粘贴岗位文字。");
+      return;
+    }
+    try {
+      const text = (await navigator.clipboard.readText()).trim();
+      if (!text) {
+        setError("剪贴板里没有可粘贴的文字。");
+        return;
+      }
+      const encoder = new TextEncoder();
+      let bytes = 0;
+      let characters = 0;
+      const accepted: string[] = [];
+      for (const character of text) {
+        const characterBytes = encoder.encode(character).byteLength;
+        if (characters + character.length > 12_000 || bytes + characterBytes > 30_000) break;
+        accepted.push(character);
+        bytes += characterBytes;
+        characters += character.length;
+      }
+      const clipped = accepted.join("");
+      setRequirementsText(clipped);
+      const wasClipped = text.length > characters;
+      setError(wasClipped
+        ? "岗位文字较长，已按 12000 字符与 30 KB 上限保留前段内容，请检查任职要求是否完整。"
+        : conflict ? conflictMessage : "");
+    } catch {
+      setError("无法读取剪贴板，请直接在输入框中粘贴岗位文字。");
     }
   }
 
@@ -932,30 +974,63 @@ function TargetBriefDialog({
     <div className={styles.briefBackdrop} onMouseDown={(event) => { if (!savingRef.current && event.target === event.currentTarget) onClose(); }}>
       <div ref={dialogRef} className={styles.briefDialog} role="dialog" aria-modal="true" aria-labelledby="brief-dialog-title">
         <div className={styles.briefDialogHeader}>
-          <div><span><ClipboardList size={18} /></span><div><small>{resume.targetName}</small><h2 id="brief-dialog-title">岗位依据</h2></div></div>
+          <div><span><ClipboardList size={18} /></span><div><small>{resume.targetName} · 以你确认的文字为准</small><h2 id="brief-dialog-title">添加目标岗位要求</h2></div></div>
           <button ref={closeRef} type="button" disabled={saving} onClick={onClose} aria-label="关闭岗位依据"><X size={20} /></button>
         </div>
         <div className={styles.briefDialogBody}>
+          <ul className={styles.jdInputMethods} aria-label="岗位要求提供方式">
+            <li className={styles.jdInputPrimary}>
+              <FileText size={17} />
+              <div><strong>粘贴文字</strong><small>推荐。内容最完整，分析前也最容易由你核对。</small></div>
+              <span>当前方式</span>
+            </li>
+            <li>
+              <ClipboardList size={17} />
+              <div><strong>只有截图</strong><small>先用手机或电脑识别并复制文字，再粘贴；平台不上传原图。</small></div>
+            </li>
+            <li>
+              <Link2 size={17} />
+              <div><strong>只有链接</strong><small>链接可记录出处，但不会被自动打开或抓取，仍需粘贴文字。</small></div>
+            </li>
+          </ul>
           <label><span>目标岗位</span><input disabled={saving} value={focusName} onChange={(event) => setFocusName(event.target.value)} maxLength={160} placeholder="例如：后端开发工程师" /></label>
-          <label><span>岗位描述 <small>{requirementsText.length} / 12000</small></span><textarea disabled={saving} value={requirementsText} onChange={(event) => setRequirementsText(event.target.value)} maxLength={12000} rows={12} placeholder="粘贴这一个岗位的职责与任职要求。系统不会自动访问或批量抓取招聘网站。" /></label>
-          <div className={styles.briefSourceGrid}>
-            <label><span>来源</span><select disabled={saving} value={sourceType} onChange={(event) => setSourceType(event.target.value as TargetBriefSource)}>
-              <option value="employer-official">企业官方招聘页（用户提供，未核验）</option>
-              <option value="boss">BOSS直聘（用户提供，未核验）</option>
-              <option value="zhaopin">智联招聘（用户提供，未核验）</option>
-              <option value="other-platform">其他招聘渠道（用户提供，未核验）</option>
-              <option value="manual">我自行整理（未核验）</option>
-            </select></label>
-            <label><span>来源链接（可选）</span><input disabled={saving} value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} inputMode="url" placeholder="https://…" /></label>
+          <div className={styles.jdTextInput}>
+            <div>
+              <label htmlFor="job-requirements">粘贴岗位职责和任职要求</label>
+              <span className={requirementsTooLarge ? styles.jdSizeExceeded : undefined}>{requirementsText.length} / 12000 字 · {(requirementBytes / 1_000).toFixed(1)} / 30 KB</span>
+              <button type="button" disabled={saving} onClick={() => void pasteRequirements()}><ClipboardList size={14} /> 从剪贴板粘贴</button>
+            </div>
+            <textarea id="job-requirements" disabled={saving} value={requirementsText} onChange={(event) => setRequirementsText(event.target.value)} maxLength={12000} rows={12} placeholder="粘贴这一个岗位的完整 JD，例如：岗位职责、任职要求、优先条件。系统只分析你在这里确认过的文字。" />
+            {requirementsTooLarge && <p className={styles.jdLimitError} role="alert">中文内容占用空间较多，当前已超过 30 KB。请精简重复介绍，保留岗位职责、任职要求和优先条件。</p>}
+            <div className={styles.requirementPreview}>
+              <span role="status">{requirementsText.trim() ? `已识别 ${requirementPreview.length} 项要求` : "等待粘贴岗位文字"}</span>
+              {requirementPreview.length > 0 ? (
+                <ol>{requirementPreview.slice(0, 3).map((item) => <li key={item}>{item}</li>)}</ol>
+              ) : (
+                <p>{requirementsText.trim() ? "暂未识别到明确要求，请尽量粘贴包含职责、经验或具体技能的完整文字。" : "保存前先查看系统理解到的内容，确认无误后再用于简历分析。"}</p>
+              )}
+              {requirementPreview.length > 3 && <small>另有 {requirementPreview.length - 3} 项，保存后在证据地图中展开。</small>}
+            </div>
           </div>
-          <div className={styles.briefPrivacy}><ShieldCheck size={17} /><p>岗位文本只用于这份简历的证据分析，不进入公共岗位库，也不会被本平台用于训练。来源链接仅保存供你核对，服务端不会自动访问。</p></div>
+          <details className={styles.briefSourceDetails} open={sourceDetailsOpen} onToggle={(event) => setSourceDetailsOpen(event.currentTarget.open)}>
+            <summary><Link2 size={15} /> 补充来源记录（可选）</summary>
+            <div className={styles.briefSourceGrid}>
+              <label><span>你从哪里看到这份 JD？</span><select disabled={saving} value={sourceType} onChange={(event) => setSourceType(event.target.value as TargetBriefSource)}>
+                <option value="manual">我自行整理或收到文字</option>
+                <option value="employer-official">企业官方招聘页</option>
+                <option value="other-platform">招聘平台、内推、邮件或其他渠道</option>
+              </select></label>
+              <label><span>原始链接（只记录，不读取）</span><input disabled={saving} value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} inputMode="url" placeholder="https://…" /></label>
+            </div>
+          </details>
+          <div className={styles.briefPrivacy}><ShieldCheck size={17} /><p>简历分析只使用你在输入框中确认的文字。岗位文本不进入公共岗位库，也不会被本平台用于训练；链接只保存供你核对，服务端不会访问。</p></div>
           {error && <p className={styles.briefError} role="alert">{error}</p>}
         </div>
         <div className={styles.briefDialogFooter}>
-          <span>保存后将立即生成基础证据地图；缺少证据时只会追问，不会编造。</span>
+          <span>{requirementsText.trim() ? "保存后将用这些要求生成证据地图；缺少证据时只会追问，不会编造。" : "可以先只保存岗位名称，之后再补充岗位文字。"}</span>
           <div>
             {resume.targetBrief && <button className={styles.clearBrief} type="button" disabled={saving} onClick={() => void clearBrief()}><Trash2 size={14} /> 清除岗位资料</button>}
-            <button ref={saveButtonRef} className="button button-primary" type="button" disabled={saving || !focusName.trim()} onClick={() => void saveBrief()}>{saving ? <><LoaderCircle className={styles.spin} size={16} /> 保存中</> : <>{conflict ? "确认覆盖" : "保存并分析"} <Sparkles size={16} /></>}</button>
+            <button ref={saveButtonRef} className="button button-primary" type="button" disabled={saving || !focusName.trim() || requirementsTooLarge} onClick={() => void saveBrief()}>{saving ? <><LoaderCircle className={styles.spin} size={16} /> 保存中</> : <>{conflict ? "确认覆盖" : requirementsText.trim() ? "确认并生成证据地图" : "保存岗位"} <Sparkles size={16} /></>}</button>
           </div>
         </div>
       </div>
