@@ -85,7 +85,7 @@ export function AdminClient() {
 
               <div className={styles.dashboardGrid}>
                 <section className={styles.recentPanel}>
-                  <div className={styles.panelHeader}><div><span>当前访客空间</span><h2>最近更新的简历</h2></div><Link href="/dashboard">查看工作台 <ArrowRight size={14} /></Link></div>
+                  <div className={styles.panelHeader}><div><span>当前访客空间</span><h2>最近更新的简历</h2></div><Link href="/dashboard">查看我的简历 <ArrowRight size={14} /></Link></div>
                   {overview.recentResumes.length ? (
                     <div className={styles.tableWrap}>
                       <table>

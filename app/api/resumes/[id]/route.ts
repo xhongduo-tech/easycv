@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { ensureDatabase, getOrCreateSession, getDatabase, recordAudit, withSessionCookie } from "@/../db";
+import { ensureDatabase, getExistingSession, getDatabase, recordAudit, withSessionCookie } from "@/../db";
 import { apiError, parseRequest, rejectCrossOrigin, withApiError } from "@/lib/api";
 import { mapResume, type ResumeRow, type TargetRow } from "@/lib/db-mappers";
 import { calculateProgress } from "@/lib/utils";
@@ -17,7 +17,8 @@ async function getOwnedResume(id: string, userId: string) {
 export async function GET(request: Request, context: RouteContext) {
   try {
     await ensureDatabase();
-    const session = await getOrCreateSession(request);
+    const session = await getExistingSession(request);
+    if (!session) return apiError(401, "UNAUTHORIZED", "请先打开属于你的简历空间");
     const params = resumeIdParamSchema.safeParse(await context.params);
     if (!params.success) return withSessionCookie(apiError(422, "VALIDATION_ERROR", "简历 ID 无效"), session);
     const row = await getOwnedResume(params.data.id, session.userId);
@@ -32,12 +33,13 @@ export async function PATCH(request: Request, context: RouteContext) {
   try {
     const originError = rejectCrossOrigin(request);
     if (originError) return originError;
-    await ensureDatabase();
-    const session = await getOrCreateSession(request);
     const params = resumeIdParamSchema.safeParse(await context.params);
-    if (!params.success) return withSessionCookie(apiError(422, "VALIDATION_ERROR", "简历 ID 无效"), session);
+    if (!params.success) return apiError(422, "VALIDATION_ERROR", "简历 ID 无效");
     const parsed = await parseRequest(request, updateResumeSchema);
-    if (!parsed.ok) return withSessionCookie(parsed.response, session);
+    if (!parsed.ok) return parsed.response;
+    await ensureDatabase();
+    const session = await getExistingSession(request);
+    if (!session) return apiError(401, "UNAUTHORIZED", "请先打开属于你的简历空间");
     const current = await getOwnedResume(params.data.id, session.userId);
     if (!current) return withSessionCookie(apiError(404, "NOT_FOUND", "没有找到这份简历"), session);
     if (parsed.data.expectedRevision !== current.revision) {
@@ -119,10 +121,11 @@ export async function DELETE(request: Request, context: RouteContext) {
   try {
     const originError = rejectCrossOrigin(request);
     if (originError) return originError;
-    await ensureDatabase();
-    const session = await getOrCreateSession(request);
     const params = resumeIdParamSchema.safeParse(await context.params);
-    if (!params.success) return withSessionCookie(apiError(422, "VALIDATION_ERROR", "简历 ID 无效"), session);
+    if (!params.success) return apiError(422, "VALIDATION_ERROR", "简历 ID 无效");
+    await ensureDatabase();
+    const session = await getExistingSession(request);
+    if (!session) return apiError(401, "UNAUTHORIZED", "请先打开属于你的简历空间");
     const current = await getOwnedResume(params.data.id, session.userId);
     if (!current) return withSessionCookie(apiError(404, "NOT_FOUND", "没有找到这份简历"), session);
     const now = new Date().toISOString();

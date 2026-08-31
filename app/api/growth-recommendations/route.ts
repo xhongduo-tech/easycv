@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { ensureDatabase, getDatabase, getOrCreateSession, withSessionCookie } from "@/../db";
+import { ensureDatabase, getDatabase, getExistingSession, withSessionCookie } from "@/../db";
 import { apiError, parseRequest, rejectCrossOrigin, withApiError } from "@/lib/api";
 import { mapResume, type ResumeRow } from "@/lib/db-mappers";
 import { explainGrowthRecommendation, recommendGrowthResources } from "@/lib/growth-data";
@@ -9,10 +9,11 @@ export async function POST(request: Request) {
   try {
     const originError = rejectCrossOrigin(request);
     if (originError) return originError;
-    await ensureDatabase();
-    const session = await getOrCreateSession(request);
     const parsed = await parseRequest(request, growthRecommendationRequestSchema);
-    if (!parsed.ok) return withSessionCookie(parsed.response, session);
+    if (!parsed.ok) return parsed.response;
+    await ensureDatabase();
+    const session = await getExistingSession(request);
+    if (!session) return apiError(401, "UNAUTHORIZED", "请先创建或打开一份属于你的简历");
 
     const row = await getDatabase()
       .prepare("SELECT * FROM resumes WHERE id = ? AND user_id = ? AND deleted_at IS NULL")

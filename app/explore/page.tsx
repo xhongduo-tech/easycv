@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { ExploreClient } from "./explore-client";
+import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
   title: "选择目标与模板",
@@ -12,10 +12,7 @@ export default async function ExplorePage({
   searchParams: Promise<{ track?: string; template?: string }>;
 }) {
   const params = await searchParams;
-  return (
-    <ExploreClient
-      initialTrack={params.track === "career" ? "career" : "study"}
-      initialTemplate={params.template}
-    />
-  );
+  const query = new URLSearchParams({ new: "1" });
+  if (params.track === "study" || params.track === "career") query.set("track", params.track);
+  redirect(`/dashboard?${query}`);
 }

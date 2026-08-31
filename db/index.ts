@@ -11,6 +11,13 @@ export interface GuestSession {
   setCookie?: string;
 }
 
+export class SessionRateLimitError extends Error {
+  constructor() {
+    super("Too many guest sessions");
+    this.name = "SessionRateLimitError";
+  }
+}
+
 export function getDatabase() {
   if (!env.DB) {
     throw new Error("D1 binding DB is unavailable");
@@ -27,6 +34,40 @@ export async function ensureDatabase() {
 }
 
 export async function getOrCreateSession(request: Request): Promise<GuestSession> {
+  const current = await getExistingSession(request);
+  if (current) return current;
+
+  const db = getDatabase();
+  const networkHash = await getRequestNetworkHash(request);
+  const sessionUsageId = await reserveGuestSessionCreation(db, networkHash);
+  if (!sessionUsageId) throw new SessionRateLimitError();
+
+  try {
+    const nextToken = randomToken();
+    const userId = `guest-${crypto.randomUUID()}`;
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + SESSION_TTL_SECONDS * 1000).toISOString();
+    await db.batch([
+      db
+        .prepare("INSERT INTO users (id, name, email, role, created_at) VALUES (?, ?, ?, 'user', ?)")
+        .bind(userId, "访客用户", `${userId}@guest.jianji.local`, now.toISOString()),
+      db
+        .prepare("INSERT INTO guest_sessions (token_hash, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)")
+        .bind(await hashToken(nextToken), userId, expiresAt, now.toISOString()),
+    ]);
+
+    const secure = new URL(request.url).protocol === "https:" ? "; Secure" : "";
+    return {
+      userId,
+      setCookie: `${SESSION_COOKIE}=${nextToken}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL_SECONDS}${secure}`,
+    };
+  } catch (error) {
+    await db.prepare("DELETE FROM guest_session_usage_events WHERE id = ?").bind(sessionUsageId).run().catch(() => undefined);
+    throw error;
+  }
+}
+
+export async function getExistingSession(request: Request): Promise<GuestSession | null> {
   await ensureDatabase();
   const db = getDatabase();
   const token = readCookie(request.headers.get("cookie"), SESSION_COOKIE);
@@ -38,25 +79,7 @@ export async function getOrCreateSession(request: Request): Promise<GuestSession
       .first<{ user_id: string }>();
     if (existing) return { userId: existing.user_id };
   }
-
-  const nextToken = randomToken();
-  const userId = `guest-${crypto.randomUUID()}`;
-  const now = new Date();
-  const expiresAt = new Date(now.getTime() + SESSION_TTL_SECONDS * 1000).toISOString();
-  await db.batch([
-    db
-      .prepare("INSERT INTO users (id, name, email, role, created_at) VALUES (?, ?, ?, 'user', ?)")
-      .bind(userId, "访客用户", `${userId}@guest.jianji.local`, now.toISOString()),
-    db
-      .prepare("INSERT INTO guest_sessions (token_hash, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)")
-      .bind(await hashToken(nextToken), userId, expiresAt, now.toISOString()),
-  ]);
-
-  const secure = new URL(request.url).protocol === "https:" ? "; Secure" : "";
-  return {
-    userId,
-    setCookie: `${SESSION_COOKIE}=${nextToken}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL_SECONDS}${secure}`,
-  };
+  return null;
 }
 
 export function withSessionCookie<T extends Response>(response: T, session: GuestSession): T {
@@ -147,6 +170,48 @@ async function initializeDatabase() {
       provider TEXT NOT NULL DEFAULT 'local-rules',
       created_at TEXT NOT NULL
     )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS guest_session_usage_events (
+      id TEXT PRIMARY KEY,
+      network_hash TEXT,
+      created_at TEXT NOT NULL
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS advice_usage_events (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      network_hash TEXT,
+      created_at TEXT NOT NULL
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS model_usage_events (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      network_hash TEXT,
+      created_at TEXT NOT NULL
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS model_request_leases (
+      slot INTEGER PRIMARY KEY,
+      request_id TEXT NOT NULL,
+      expires_at TEXT NOT NULL
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS model_session_leases (
+      owner_key TEXT PRIMARY KEY,
+      request_id TEXT NOT NULL,
+      expires_at TEXT NOT NULL
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS model_consent_events (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      resume_id TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      purpose TEXT NOT NULL,
+      consent_version TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS model_provider_state (
+      provider_key TEXT PRIMARY KEY,
+      consecutive_failures INTEGER NOT NULL DEFAULT 0,
+      open_until TEXT,
+      updated_at TEXT NOT NULL
+    )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS audit_events (
       id TEXT PRIMARY KEY,
       actor_id TEXT NOT NULL,
@@ -166,6 +231,15 @@ async function initializeDatabase() {
     db.prepare(
       "CREATE INDEX IF NOT EXISTS idx_suggestion_events_resume ON suggestion_events(resume_id, created_at)",
     ),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_guest_session_usage_network_created ON guest_session_usage_events(network_hash, created_at)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_guest_session_usage_created ON guest_session_usage_events(created_at)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_advice_usage_user_created ON advice_usage_events(user_id, created_at)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_advice_usage_network_created ON advice_usage_events(network_hash, created_at)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_advice_usage_created ON advice_usage_events(created_at)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_model_usage_user_created ON model_usage_events(user_id, created_at)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_model_usage_network_created ON model_usage_events(network_hash, created_at)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_model_usage_created ON model_usage_events(created_at)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_model_consent_resume_created ON model_consent_events(resume_id, created_at)"),
     db.prepare(
       "CREATE INDEX IF NOT EXISTS idx_audit_events_resource ON audit_events(resource_type, resource_id)",
     ),
@@ -301,4 +375,48 @@ function randomToken() {
 async function hashToken(token: string) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+export async function getRequestNetworkHash(request: Request) {
+  const address = request.headers.get("cf-connecting-ip")
+    ?? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  if (!address || address.length > 100) return null;
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(address));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function reserveGuestSessionCreation(
+  db: ReturnType<typeof getDatabase>,
+  networkHash: string | null,
+) {
+  const now = new Date();
+  const nowIso = now.toISOString();
+  const hourStart = new Date(Math.floor(now.getTime() / 3_600_000) * 3_600_000).toISOString();
+  const dayStart = new Date(Math.floor(now.getTime() / 86_400_000) * 86_400_000).toISOString();
+  const cleanupBefore = new Date(now.getTime() - 172_800_000).toISOString();
+  await db.prepare("DELETE FROM guest_session_usage_events WHERE created_at < ?")
+    .bind(cleanupBefore)
+    .run()
+    .catch(() => undefined);
+  const id = crypto.randomUUID();
+  const reserved = await db.prepare(`INSERT INTO guest_session_usage_events (id, network_hash, created_at)
+    SELECT ?, ?, ?
+    WHERE (? IS NULL OR (SELECT COUNT(*) FROM guest_session_usage_events WHERE network_hash = ? AND created_at >= ?) < 30)
+      AND (? IS NULL OR (SELECT COUNT(*) FROM guest_session_usage_events WHERE network_hash = ? AND created_at >= ?) < 100)
+      AND (SELECT COUNT(*) FROM guest_session_usage_events WHERE created_at >= ?) < 1000
+    RETURNING id`)
+    .bind(
+      id,
+      networkHash,
+      nowIso,
+      networkHash,
+      networkHash,
+      hourStart,
+      networkHash,
+      networkHash,
+      dayStart,
+      dayStart,
+    )
+    .first<{ id: string }>();
+  return reserved?.id ?? null;
 }

@@ -144,32 +144,17 @@ export const growthRecommendationRequestSchema = z
 
 export const recommendationRequestSchema = z
   .object({
-    resumeId: z.string().uuid("简历 ID 格式不正确").optional(),
+    resumeId: z.string().uuid("简历 ID 格式不正确"),
     content: resumeContentSchema.optional(),
     track: trackSchema.optional(),
     targetProfileId: requiredText("目标画像 ID", 100).optional(),
     targetId: requiredText("目标画像 ID", 100).optional(),
     targetName: requiredText("目标名称", 240).optional(),
-    section: z.enum(["overview", "summary", "experience", "education", "projects"]).default("overview"),
+    allowExternalModel: z.boolean().default(false),
+    section: z.enum(["overview", "basics", "summary", "experience", "education", "projects", "extras"]).default("overview"),
   })
   .strict()
   .superRefine((value, context) => {
-    if (value.resumeId === undefined && value.content === undefined) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "resumeId 和 content 至少需要提供一个",
-        path: ["resumeId"],
-      });
-    }
-
-    if (value.resumeId === undefined && value.track === undefined) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "直接提交 content 时必须提供 track",
-        path: ["track"],
-      });
-    }
-
     if (
       value.targetProfileId !== undefined &&
       value.targetId !== undefined &&

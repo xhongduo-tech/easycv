@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
 import type { ZodError, ZodType } from "zod";
+import { SessionRateLimitError } from "@/../db";
 import { formatValidationIssues } from "@/lib/validation";
 
 export type ApiErrorCode =
   | "VALIDATION_ERROR"
+  | "UNAUTHORIZED"
   | "NOT_FOUND"
   | "CONFLICT"
   | "FORBIDDEN"
+  | "RATE_LIMITED"
   | "PAYLOAD_TOO_LARGE"
   | "INTERNAL_ERROR";
 
@@ -68,6 +71,9 @@ export function rejectCrossOrigin(request: Request) {
 }
 
 export function withApiError(error: unknown) {
+  if (error instanceof SessionRateLimitError) {
+    return apiError(429, "RATE_LIMITED", "新建访客空间过于频繁，请稍后再试");
+  }
   console.error("API request failed", error instanceof Error ? error.message : "Unknown error");
   return apiError(500, "INTERNAL_ERROR", "服务暂时不可用，请稍后重试");
 }

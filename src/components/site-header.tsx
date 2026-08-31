@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowUpRight, LayoutDashboard } from "lucide-react";
+import { ArrowUpRight, FileText, Sparkles } from "lucide-react";
 import { Brand } from "@/components/brand";
 
 export function SiteHeader() {
@@ -8,41 +8,17 @@ export function SiteHeader() {
       <div className="shell header-inner">
         <Brand />
         <nav className="desktop-nav" aria-label="主导航">
-          <Link href="/explore?track=study">
-            留学申请
-          </Link>
-          <Link href="/explore?track=career">
-            毕业求职
-          </Link>
-          <Link href="/explore">开始创建</Link>
-          <Link href="/growth">成长路线</Link>
-          <Link href="/web-resume">网页简历</Link>
-          <Link href="/#how-it-works">使用指南</Link>
+          <span><Sparkles size={14} aria-hidden="true" /> AI 简历助手</span>
         </nav>
         <div className="header-actions">
           <Link className="button button-ghost header-dashboard" href="/dashboard">
-            <LayoutDashboard size={17} aria-hidden="true" />
-            工作台
+            <FileText size={17} aria-hidden="true" />
+            我的简历
           </Link>
-          <Link className="button button-primary" href="/explore">
-            免费创建
+          <Link className="button button-primary" href="/dashboard?new=1">
+            创建简历
             <ArrowUpRight size={17} aria-hidden="true" />
           </Link>
-          <details className="mobile-menu">
-            <summary aria-label="打开导航">
-              <span />
-              <span />
-              <span />
-            </summary>
-            <div className="mobile-menu-panel">
-              <Link href="/explore?track=study">留学申请</Link>
-              <Link href="/explore?track=career">毕业求职</Link>
-              <Link href="/explore">开始创建</Link>
-              <Link href="/growth">成长路线</Link>
-              <Link href="/web-resume">网页简历</Link>
-              <Link href="/dashboard">我的工作台</Link>
-            </div>
-          </details>
         </div>
       </div>
     </header>

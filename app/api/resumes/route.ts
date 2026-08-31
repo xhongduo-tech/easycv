@@ -43,10 +43,10 @@ export async function POST(request: Request) {
   try {
     const originError = rejectCrossOrigin(request);
     if (originError) return originError;
+    const parsed = await parseRequest(request, createResumeSchema);
+    if (!parsed.ok) return parsed.response;
     await ensureDatabase();
     const session = await getOrCreateSession(request);
-    const parsed = await parseRequest(request, createResumeSchema);
-    if (!parsed.ok) return withSessionCookie(parsed.response, session);
     const input = parsed.data;
     const db = getDatabase();
 

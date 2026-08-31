@@ -195,6 +195,58 @@ export const growthResources: GrowthResource[] = [
     caveat: "学习计划与认证考试相互独立，完成课程不代表取得认证。",
     reviewedAt: "2026-08-30",
   },
+  {
+    id: "china-mooc-computer-science",
+    title: "计算机与工程精品课程",
+    provider: "中国大学 MOOC",
+    officialUrl: "https://www.icourse163.org/",
+    area: "engineering",
+    tracks: ["study", "career"],
+    skillTags: ["计算机基础", "程序设计", "工程实践"],
+    audience: "希望用中文系统补充计算机或工程基础的学习者",
+    outcome: "从高校课程中选择与目标最相关的一门，并用真实作业或项目形成证据",
+    caveat: "平台课程、认证与开放安排可能变化；请以课程页说明为准。",
+    reviewedAt: "2026-08-31",
+  },
+  {
+    id: "khan-statistics-probability",
+    title: "Statistics and Probability",
+    provider: "Khan Academy",
+    officialUrl: "https://www.khanacademy.org/math/statistics-probability",
+    area: "data",
+    tracks: ["study", "career"],
+    skillTags: ["统计", "概率", "数据推断"],
+    audience: "需要补齐统计与概率基础的数据、商科和科研方向学习者",
+    outcome: "练习描述统计、概率与推断，为后续数据项目打基础",
+    caveat: "学习记录不能替代学位课程、项目成果或岗位能力证明。",
+    reviewedAt: "2026-08-31",
+  },
+  {
+    id: "edx-computer-science",
+    title: "Computer Science Courses",
+    provider: "edX",
+    officialUrl: "https://www.edx.org/learn/computer-science",
+    area: "engineering",
+    tracks: ["study", "career"],
+    skillTags: ["计算机科学", "编程", "项目"],
+    audience: "希望从大学与机构课程中选择计算机方向训练的学习者",
+    outcome: "按目标选择一门课程，并把练习转化为可核验项目",
+    caveat: "课程费用、证书与开放时间以提供方页面为准，不保证录取或录用。",
+    reviewedAt: "2026-08-31",
+  },
+  {
+    id: "microsoft-learn",
+    title: "Microsoft Learn Training",
+    provider: "Microsoft Learn",
+    officialUrl: "https://learn.microsoft.com/en-us/training/",
+    area: "security-cloud",
+    tracks: ["study", "career"],
+    skillTags: ["Azure", "云计算", "安全", "开发"],
+    audience: "希望通过交互式模块补充 Microsoft 技术栈能力的学习者",
+    outcome: "按目标选取学习路径，并用实验或项目验证掌握程度",
+    caveat: "完成学习模块不等同取得 Microsoft 认证，也不保证岗位结果。",
+    reviewedAt: "2026-08-31",
+  },
 ];
 
 const areaEvidence: Record<GrowthArea, string[]> = {
@@ -232,15 +284,18 @@ function preferredResource(area: GrowthArea, resume: ResumeRecord, intent: strin
   }
   if (area === "data") {
     if (/人工智能|\bai\b|机器学习|machine learning|算法|计算机|computer/.test(intent)) return byId("machine-learning-specialization") ?? byId("ibm-data-science");
+    if (/统计|statistics|概率|probability|量化/.test(intent)) return byId("khan-statistics-probability") ?? byId("google-data-analytics");
     if (/power bi|商业智能|\bbi\b/.test(intent)) return byId("microsoft-power-bi");
     return byId("google-data-analytics");
   }
   if (area === "engineering") {
     if (/github|网页|作品集|portfolio/.test(intent)) return byId("github-skills");
+    if (resume.track === "study" && /工程|软件|计算机|computer/.test(intent)) return byId("china-mooc-computer-science") ?? byId("edx-computer-science");
     return byId("meta-front-end") ?? byId("github-skills");
   }
   if (area === "design") return byId("google-ux-design");
   if (area === "security-cloud") {
+    if (/azure|微软|microsoft/.test(intent)) return byId("microsoft-learn") ?? byId("aws-cloud-practitioner");
     return /安全|security|网络|siem/.test(intent) ? byId("google-cybersecurity") : byId("aws-cloud-practitioner");
   }
   return byId("upenn-career-english");
@@ -270,6 +325,38 @@ export function recommendGrowthResources(resume: ResumeRecord, limit = 3) {
     if (recommendations.length >= limit) break;
   }
   return recommendations;
+}
+
+export interface GrowthGapSuggestion {
+  resource: GrowthResource;
+  reason: string;
+}
+
+export function recommendGrowthGaps(resume: ResumeRecord, limit = 1): GrowthGapSuggestion[] {
+  const { evidence, intent } = recommendationContext(resume);
+  const candidates = (Object.keys(growthAreaLabels) as GrowthArea[])
+    .map((area) => {
+      const hasEvidence = areaEvidence[area].some((keyword) => evidence.includes(keyword));
+      const matchesIntent = areaIntent[area].test(intent);
+      const studyCommunication = area === "communication" && resume.track === "study";
+      return { area, score: matchesIntent ? 7 : studyCommunication ? 2 : 0, hasEvidence };
+    })
+    .filter((item) => item.score > 0 && !item.hasEvidence)
+    .sort((a, b) => b.score - a.score);
+
+  const suggestions: GrowthGapSuggestion[] = [];
+  for (const candidate of candidates) {
+    const resource = preferredResource(candidate.area, resume, intent);
+    if (!resource) continue;
+    suggestions.push({
+      resource,
+      reason: candidate.area === "communication" && resume.track === "study"
+        ? "这是一份留学申请版本，但当前草稿尚未看到英文沟通证据；请先确认目标项目要求，再决定是否补强。"
+        : `你的目标与${growthAreaLabels[candidate.area]}相关，但当前草稿尚未看到对应证据；可先补充真实项目，确有需要时再考虑系统学习。`,
+    });
+    if (suggestions.length >= limit) break;
+  }
+  return suggestions;
 }
 
 export function explainGrowthRecommendation(resume: ResumeRecord, resource: GrowthResource) {

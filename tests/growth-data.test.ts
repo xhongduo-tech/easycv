@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { growthResources, recommendGrowthResources } from "@/lib/growth-data";
+import { growthResources, recommendGrowthGaps, recommendGrowthResources } from "@/lib/growth-data";
 import { createBlankContent } from "@/lib/sample-data";
 import type { ResumeRecord } from "@/types/resume";
 
@@ -12,6 +12,11 @@ describe("growth route catalog", () => {
       expect(resource.reviewedAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       expect(resource.caveat.length).toBeGreaterThan(10);
     }
+    expect(new Set(growthResources.map((item) => item.provider))).toEqual(expect.objectContaining({
+      size: expect.any(Number),
+    }));
+    expect(growthResources.some((item) => item.provider === "中国大学 MOOC")).toBe(true);
+    expect(growthResources.some((item) => item.provider === "Khan Academy")).toBe(true);
   });
 
   it("returns at most three distinct, target-aware priorities", () => {
@@ -55,5 +60,9 @@ describe("growth route catalog", () => {
     const result = recommendGrowthResources(resume);
     expect(result.map((item) => item.area)).toEqual(["data", "engineering", "communication"]);
     expect(result.some((item) => item.id === "wharton-business-foundations")).toBe(false);
+    const gap = recommendGrowthGaps(resume);
+    expect(gap).toHaveLength(1);
+    expect(gap[0].resource.area).toBe("data");
+    expect(gap[0].reason).toContain("尚未看到对应证据");
   });
 });

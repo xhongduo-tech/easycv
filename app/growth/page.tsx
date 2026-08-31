@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
-import { GrowthClient } from "./growth-client";
+import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
-  title: "成长路线建议",
-  description: "根据目标简历中的能力证据，规划课程、证书与作品补强路线。",
+  title: "简历补强建议",
+  description: "根据目标简历中的能力证据，在编辑器内提示可选的学习与作品补强方向。",
 };
 
-export default function GrowthPage() {
-  return <GrowthClient />;
+export default async function GrowthPage({ searchParams }: { searchParams: Promise<{ resumeId?: string }> }) {
+  const { resumeId } = await searchParams;
+  redirect(resumeId ? `/builder/${encodeURIComponent(resumeId)}?panel=assist#learning-hint` : "/dashboard");
 }

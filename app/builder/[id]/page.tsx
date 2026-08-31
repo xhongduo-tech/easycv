@@ -8,7 +8,8 @@ export const metadata: Metadata = {
   twitter: { images: [] },
 };
 
-export default async function BuilderPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function BuilderPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ export?: string }> }) {
   const { id } = await params;
-  return <BuilderClient resumeId={id} />;
+  const query = await searchParams;
+  return <BuilderClient resumeId={id} initialExport={query.export === "web"} />;
 }

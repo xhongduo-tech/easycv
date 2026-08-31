@@ -9,17 +9,41 @@ export function createAdvice(
   section = "overview",
 ): AdvisorResult {
   const targetLabel = target?.name ?? (track === "study" ? "目标院校" : "目标企业");
-  const allBullets = [
+  const overviewBullets = [
     ...content.experience.flatMap((item) => item.bullets),
     ...content.projects.flatMap((item) => item.bullets),
     ...content.education.flatMap((item) => item.highlights),
   ];
-  const measurable = allBullets.filter((bullet) => metricPattern.test(bullet)).length;
+  const scopedBullets = section === "experience"
+    ? content.experience.flatMap((item) => item.bullets)
+    : section === "projects"
+      ? content.projects.flatMap((item) => item.bullets)
+      : section === "education"
+        ? content.education.flatMap((item) => item.highlights)
+        : section === "summary"
+          ? [content.summary].filter(Boolean)
+          : section === "basics" || section === "extras"
+            ? []
+            : overviewBullets;
+  const scopedContent = section === "summary"
+    ? content.summary
+    : section === "experience"
+      ? content.experience
+      : section === "projects"
+        ? content.projects
+        : section === "education"
+          ? content.education
+          : section === "basics"
+            ? { headline: content.basics.headline }
+            : section === "extras"
+              ? { skills: content.skills, languages: content.languages, awards: content.awards }
+              : content;
+  const measurable = scopedBullets.filter((bullet) => metricPattern.test(bullet)).length;
   const keywordPool = target?.keywords ??
     (track === "study"
       ? ["研究潜力", "方法", "学术严谨", "独立探索"]
       : ["用户价值", "协同", "数据驱动", "业务影响"]);
-  const haystack = JSON.stringify(content).toLowerCase();
+  const haystack = JSON.stringify(scopedContent).toLowerCase();
   const matchedKeywords = keywordPool.filter((keyword) => haystack.includes(keyword.toLowerCase()));
 
   let score = 46;
@@ -33,7 +57,7 @@ export function createAdvice(
   score = Math.min(96, score);
 
   const suggestions: AdvisorResult["suggestions"] = [];
-  if (content.summary.length < 70) {
+  if ((section === "overview" || section === "summary") && content.summary.length < 70) {
     suggestions.push({
       id: "summary-evidence",
       severity: "high",
@@ -41,7 +65,7 @@ export function createAdvice(
       detail: `当前简介偏短。建议用“定位 + 一项关键能力 + 一条可验证成果”回应 ${targetLabel}，避免只写形容词。`,
     });
   }
-  if (measurable < 2) {
+  if (["overview", "experience", "projects", "education"].includes(section) && measurable < 2) {
     suggestions.push({
       id: "metric-density",
       severity: "high",
@@ -57,7 +81,7 @@ export function createAdvice(
       detail: `可自然体现 ${keywordPool.slice(0, 3).join("、")}，但必须由真实经历支撑，避免关键词堆叠。`,
     });
   }
-  if (track === "study" && content.projects.length === 0) {
+  if (track === "study" && (section === "overview" || section === "projects") && content.projects.length === 0) {
     suggestions.push({
       id: "research-readiness",
       severity: "high",
@@ -65,7 +89,7 @@ export function createAdvice(
       detail: "说明问题、方法、个人贡献和发现，让审阅者能判断你的研究准备度。",
     });
   }
-  if (track === "career" && content.experience.length === 0) {
+  if (track === "career" && (section === "overview" || section === "experience") && content.experience.length === 0) {
     suggestions.push({
       id: "role-evidence",
       severity: "high",
@@ -74,7 +98,17 @@ export function createAdvice(
     });
   }
   if (suggestions.length < 3) {
-    suggestions.push({
+    suggestions.push(section === "basics" ? {
+      id: "headline-focus",
+      severity: "low",
+      title: "让标题直接说明定位",
+      detail: "用专业方向、目标角色或核心能力组成一句短标题，不在基本信息中堆叠自我评价。",
+    } : section === "extras" ? {
+      id: "skills-evidence",
+      severity: "low",
+      title: "只保留能被证明的技能",
+      detail: "优先保留能在教育、经历或项目中找到证据的技能，并删除过宽或重复的标签。",
+    } : {
       id: "verb-variety",
       severity: "low",
       title: "让每条经历从动作开始",
@@ -82,10 +116,12 @@ export function createAdvice(
     });
   }
 
-  const sourceBullet = allBullets[0] ?? "完成一项与目标相关的项目";
-  const rewrite = metricPattern.test(sourceBullet)
-    ? `${sourceBullet.replace(/[。；;]$/, "")}；补充所用方法与个人职责边界，使结果可复核。`
-    : `${sourceBullet.replace(/[。；;]$/, "")}；通过【真实方法/工具】解决【具体问题】，最终带来【请核实后填写的结果】。`;
+  const sourceText = scopedBullets[0] || sectionPlaceholder(section);
+  const rewrite = section === "summary"
+    ? `${sourceText.replace(/[。；;]$/, "")}；补充一项与${targetLabel}相关、可核实的能力或成果。`
+    : metricPattern.test(sourceText)
+      ? `${sourceText.replace(/[。；;]$/, "")}；补充所用方法与个人职责边界，使结果可复核。`
+      : `${sourceText.replace(/[。；;]$/, "")}；通过【真实方法/工具】解决【具体问题】，最终带来【请核实后填写的结果】。`;
 
   return {
     score,
@@ -99,12 +135,26 @@ export function createAdvice(
   };
 }
 
+function sectionPlaceholder(section: string) {
+  const placeholders: Record<string, string> = {
+    summary: "用一句话说明你的专业定位",
+    education: "补充一项与目标相关的课程、研究或学术成果",
+    experience: "补充一项与目标相关的工作或实践经历",
+    projects: "补充一项与目标相关的项目经历",
+    basics: "用一句话明确你的专业定位",
+    extras: "补充与目标直接相关、且能被经历证明的技能",
+  };
+  return placeholders[section] ?? "完成一项与目标相关的项目";
+}
+
 function sectionLabel(section: string) {
   const labels: Record<string, string> = {
     summary: "个人简介",
     experience: "经历",
     education: "教育",
     projects: "项目",
+    basics: "基本信息",
+    extras: "技能与其他",
   };
   return labels[section] ?? "整体";
 }

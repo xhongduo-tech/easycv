@@ -125,6 +125,82 @@ export const suggestionEvents = sqliteTable(
   (table) => [index("idx_suggestion_events_resume").on(table.resumeId, table.createdAt)],
 );
 
+export const guestSessionUsageEvents = sqliteTable(
+  "guest_session_usage_events",
+  {
+    id: text("id").primaryKey(),
+    networkHash: text("network_hash"),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [
+    index("idx_guest_session_usage_network_created").on(table.networkHash, table.createdAt),
+    index("idx_guest_session_usage_created").on(table.createdAt),
+  ],
+);
+
+export const adviceUsageEvents = sqliteTable(
+  "advice_usage_events",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    networkHash: text("network_hash"),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [
+    index("idx_advice_usage_user_created").on(table.userId, table.createdAt),
+    index("idx_advice_usage_network_created").on(table.networkHash, table.createdAt),
+    index("idx_advice_usage_created").on(table.createdAt),
+  ],
+);
+
+export const modelUsageEvents = sqliteTable(
+  "model_usage_events",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    networkHash: text("network_hash"),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [
+    index("idx_model_usage_user_created").on(table.userId, table.createdAt),
+    index("idx_model_usage_network_created").on(table.networkHash, table.createdAt),
+    index("idx_model_usage_created").on(table.createdAt),
+  ],
+);
+
+export const modelRequestLeases = sqliteTable("model_request_leases", {
+  slot: integer("slot").primaryKey(),
+  requestId: text("request_id").notNull(),
+  expiresAt: text("expires_at").notNull(),
+});
+
+export const modelSessionLeases = sqliteTable("model_session_leases", {
+  ownerKey: text("owner_key").primaryKey(),
+  requestId: text("request_id").notNull(),
+  expiresAt: text("expires_at").notNull(),
+});
+
+export const modelConsentEvents = sqliteTable(
+  "model_consent_events",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    resumeId: text("resume_id").notNull(),
+    provider: text("provider").notNull(),
+    purpose: text("purpose").notNull(),
+    consentVersion: text("consent_version").notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [index("idx_model_consent_resume_created").on(table.resumeId, table.createdAt)],
+);
+
+export const modelProviderState = sqliteTable("model_provider_state", {
+  providerKey: text("provider_key").primaryKey(),
+  consecutiveFailures: integer("consecutive_failures").notNull().default(0),
+  openUntil: text("open_until"),
+  updatedAt: text("updated_at").notNull(),
+});
+
 export const auditEvents = sqliteTable(
   "audit_events",
   {

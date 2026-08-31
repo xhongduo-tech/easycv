@@ -30,4 +30,17 @@ describe("target-aware local advisor", () => {
     expect(result.score).toBeLessThan(100);
     expect(result.suggestions.length).toBeGreaterThanOrEqual(1);
   });
+
+  it("keeps rewrite drafts inside the requested section", () => {
+    const content = createStarterContent("career");
+    content.experience[0].bullets = ["工作经历专用内容"];
+    content.projects[0].bullets = ["项目章节专用内容"];
+
+    const projectAdvice = createAdvice(content, "career", undefined, "projects");
+    const summaryAdvice = createAdvice(content, "career", undefined, "summary");
+
+    expect(projectAdvice.rewrite).toContain("项目章节专用内容");
+    expect(projectAdvice.rewrite).not.toContain("工作经历专用内容");
+    expect(summaryAdvice.rewrite).toContain(content.summary.replace(/[。；;]$/, ""));
+  });
 });

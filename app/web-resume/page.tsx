@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
-import { WebResumeClient } from "./web-resume-client";
+import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
-  title: "GitHub 网页简历",
-  description: "导出安全、独立、可直接部署至 GitHub Pages 的个人网页简历。",
+  title: "网页简历输出",
+  description: "导出安全、独立、可部署至 GitHub Pages 或其他静态托管服务的个人网页简历。",
 };
 
-export default function WebResumePage() {
-  return <WebResumeClient />;
+export default async function WebResumePage({ searchParams }: { searchParams: Promise<{ resumeId?: string }> }) {
+  const { resumeId } = await searchParams;
+  redirect(resumeId ? `/builder/${encodeURIComponent(resumeId)}?export=web` : "/dashboard");
 }

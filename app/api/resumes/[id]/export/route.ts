@@ -1,4 +1,4 @@
-import { ensureDatabase, getOrCreateSession, getDatabase, recordAudit, withSessionCookie } from "@/../db";
+import { ensureDatabase, getExistingSession, getDatabase, recordAudit, withSessionCookie } from "@/../db";
 import { apiError, withApiError } from "@/lib/api";
 import { mapResume, mapTemplate, type ResumeRow, type TemplateRow } from "@/lib/db-mappers";
 import { toStandaloneHtml } from "@/lib/web-resume";
@@ -8,15 +8,16 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 export async function GET(request: Request, context: RouteContext) {
   try {
-    await ensureDatabase();
-    const session = await getOrCreateSession(request);
     const params = resumeIdParamSchema.safeParse(await context.params);
     const searchParams = new URL(request.url).searchParams;
     const query = exportQuerySchema.safeParse({
       format: searchParams.get("format") ?? undefined,
       includeContact: searchParams.get("includeContact") ?? undefined,
     });
-    if (!params.success || !query.success) return withSessionCookie(apiError(422, "VALIDATION_ERROR", "导出参数无效"), session);
+    if (!params.success || !query.success) return apiError(422, "VALIDATION_ERROR", "导出参数无效");
+    await ensureDatabase();
+    const session = await getExistingSession(request);
+    if (!session) return apiError(401, "UNAUTHORIZED", "请先打开属于你的简历空间");
 
     const row = await getDatabase()
       .prepare("SELECT * FROM resumes WHERE id = ? AND user_id = ? AND deleted_at IS NULL")

@@ -15,6 +15,13 @@
       "when": 1788097200000,
       "tag": "0001_catalog_meta",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1788148000000,
+      "tag": "0002_model_usage_guards",
+      "breakpoints": true
     }
   ]
 }
