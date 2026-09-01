@@ -108,6 +108,17 @@ function createDatabase() {
       release_reason TEXT,
       settled_at TEXT
     );
+    CREATE TRIGGER trg_ai_credit_ledger_settlement_refund
+    AFTER UPDATE OF status, credits ON ai_credit_ledger
+    WHEN OLD.status = 'reserved' AND NEW.status IN ('consumed','released')
+    BEGIN
+      UPDATE ai_credit_lots
+      SET remaining_credits = remaining_credits + CASE
+        WHEN NEW.status = 'released' THEN OLD.credits
+        ELSE OLD.credits - NEW.credits
+      END
+      WHERE id = OLD.lot_id;
+    END;
     CREATE TABLE model_run_costs (
       request_id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,

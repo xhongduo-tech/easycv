@@ -3,7 +3,7 @@ import type { getDatabase } from "@/../db";
 type Database = ReturnType<typeof getDatabase>;
 
 export const CURRENT_LEGAL_DOCUMENTS = {
-  termsVersion: "terms-2026-09-01-v1",
+  termsVersion: "terms-2026-09-01-v2",
   privacyVersion: "privacy-2026-09-01-v1",
 } as const;
 

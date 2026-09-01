@@ -47,6 +47,7 @@ import { ResumePreview } from "@/components/resume-preview";
 import { TargetBrandMark } from "@/components/target-brand-mark";
 import { recommendGrowthGaps } from "@/lib/growth-data";
 import { analyzeJobFit, extractRequirements, targetBriefSourceLabels } from "@/lib/job-fit";
+import { MAX_AI_POINTS_PER_REQUEST, SIGNUP_AI_CREDITS } from "@/lib/pricing";
 import {
   applyRewriteProposal,
   getTextAtSourceRef,
@@ -83,6 +84,7 @@ type AdviceResponse = AdvisorResult & {
   bonusCredits?: number;
   purchasedCredits?: number;
   creditCharged?: number;
+  creditChargeCap?: number;
   accountKind?: "user" | "guest" | "none";
   baseResumeRevision?: number;
   baseBriefRevision?: number;
@@ -101,8 +103,8 @@ const modelFallbackLabels: Record<NonNullable<AdviceResponse["fallbackReason"]>,
   "rate-limit": "请求过于频繁或今日服务容量已达上限，已使用基础分析",
   concurrency: "模型当前繁忙，已使用基础分析",
   "provider-error": "模型暂不可用，已使用基础分析",
-  "no-credits": "增强额度已用完，已继续使用免费的基础分析",
-  "login-required": "访客体验已用完，登录后可领取注册额度；本次使用基础分析",
+  "no-credits": "简迹点已用完，已继续使用免费的基础分析",
+  "login-required": "访客简迹点已用完，登录后可领取注册赠点；本次使用基础分析",
 };
 
 const sections: Array<{ id: SectionId; label: string; icon: typeof CircleUserRound }> = [
@@ -129,6 +131,7 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
   const [adviceError, setAdviceError] = useState("");
   const [modelAvailable, setModelAvailable] = useState(false);
   const [creditBalance, setCreditBalance] = useState(0);
+  const [maxCreditCharge, setMaxCreditCharge] = useState(MAX_AI_POINTS_PER_REQUEST);
   const [accountKind, setAccountKind] = useState<"user" | "guest" | "none">("none");
   const [allowExternalModel, setAllowExternalModel] = useState(false);
   const [adviceSection, setAdviceSection] = useState<SectionId | null>(null);
@@ -178,9 +181,10 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
           .then(async (response) => response.ok ? await response.json() as {
             modelAvailable?: boolean;
             creditBalance?: number;
+            maxCreditCharge?: number;
             accountKind?: "user" | "guest" | "none";
           } : {})
-          .catch(() => ({} as { modelAvailable?: boolean; creditBalance?: number; accountKind?: "user" | "guest" | "none" })),
+          .catch(() => ({} as { modelAvailable?: boolean; creditBalance?: number; maxCreditCharge?: number; accountKind?: "user" | "guest" | "none" })),
       ]);
       const templateResult = (await templateResponse.json()) as {
         templates?: ResumeTemplate[];
@@ -193,6 +197,7 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
       setTemplates(templateResult.templates ?? []);
       setModelAvailable(Boolean(capability.modelAvailable));
       setCreditBalance(Number(capability.creditBalance ?? 0));
+      setMaxCreditCharge(Math.max(1, Number(capability.maxCreditCharge ?? MAX_AI_POINTS_PER_REQUEST)));
       setAccountKind(capability.accountKind ?? "none");
       setDirty(false);
       setSaveState("idle");
@@ -591,8 +596,9 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
   }
 
   const enhancedRequest = modelAvailable && allowExternalModel && creditBalance > 0;
+  const visibleChargeCap = Math.min(creditBalance, maxCreditCharge);
   const usingModel = advice ? advice.provider !== "local-rules" : enhancedRequest;
-  const adviceButtonLabel = enhancedRequest ? "优化当前内容 · 1 额度" : "优化当前内容";
+  const adviceButtonLabel = enhancedRequest ? `优化当前内容 · 最多 ${visibleChargeCap} 点` : "优化当前内容";
   const targetedAdvice = Boolean(adviceFocus);
 
   return (
@@ -710,7 +716,7 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
             <JobEvidenceCard
               resume={resume}
               jobFit={jobFit}
-              chargesCredit={enhancedRequest}
+              creditChargeCap={enhancedRequest ? visibleChargeCap : 0}
               adviceLoading={adviceLoading}
               editButtonRef={briefTriggerRef}
               onEdit={() => setBriefOpen(true)}
@@ -756,17 +762,17 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
         <aside id="builder-advice" role="tabpanel" aria-labelledby="builder-tab-advice" className={`${styles.advicePanel} ${mobileView !== "advice" ? styles.mobileHidden : ""}`}>
           <div className={styles.adviceHeader}>
             <div><Sparkles size={17} /><span>{usingModel ? "AI 简历助手" : "简历助手"}</span></div>
-            <span className={styles.offlineTag}>{modelAvailable ? `增强额度 ${creditBalance}` : "基础模式"}</span>
+            <span className={styles.offlineTag}>{modelAvailable ? `简迹点 ${creditBalance}` : "基础模式"}</span>
           </div>
           <div className={styles.modelMode}>
             {modelAvailable ? (
               <>
-                <label data-disabled={creditBalance < 1}><input type="checkbox" disabled={creditBalance < 1} checked={allowExternalModel} onChange={(event) => { setAllowExternalModel(event.target.checked); setAdvice(null); }} /><span><Check size={12} /></span>使用 DeepSeek 增强优化 · 每次 1 额度</label>
+                <label data-disabled={creditBalance < 1}><input type="checkbox" disabled={creditBalance < 1} checked={allowExternalModel} onChange={(event) => { setAllowExternalModel(event.target.checked); setAdvice(null); }} /><span><Check size={12} /></span>使用 DeepSeek 增强优化 · 按实际 Token 结算</label>
                 <div className={styles.creditMeta} aria-live="polite">
-                  <span>{accountKind === "guest" ? `访客体验剩余 ${creditBalance} 次` : `剩余 ${creditBalance} 次增强优化`}</span>
-                  {accountKind === "guest" ? <Link href={`/auth/register?returnTo=${encodeURIComponent(`/builder/${resume.id}`)}`}>注册另领 5 次</Link> : <Link href="/account#credits">额度说明</Link>}
+                  <span>剩余 {creditBalance} 简迹点{enhancedRequest ? ` · 本次最多 ${visibleChargeCap} 点` : ""}</span>
+                  {accountKind === "guest" ? <Link href={`/auth/register?returnTo=${encodeURIComponent(`/builder/${resume.id}`)}`}>注册另领 {SIGNUP_AI_CREDITS} 点</Link> : <Link href="/pricing/methodology">计费说明</Link>}
                 </div>
-                {creditBalance < 1 && <p className={styles.creditEmpty}>{accountKind === "guest" ? "访客体验已用完。登录后可领取注册额度，基础分析仍可继续使用。" : "增强额度已用完。你仍可免费编辑、检查和导出简历。"}</p>}
+                {creditBalance < 1 && <p className={styles.creditEmpty}>{accountKind === "guest" ? "访客简迹点已用完。登录后可领取注册赠点，基础分析仍可继续使用。" : "简迹点已用完。你仍可免费编辑、检查和导出简历。"}</p>}
                 <small>仅在你点击“优化”时发送当前章节、目标，以及你已填写的岗位描述；简历联系方式、地点、项目链接不发送，岗位文本中的常见邮箱、电话和微信号会先移除。当前只发送文字，不会发送截图或本地文件。</small>
               </>
             ) : (
@@ -788,7 +794,7 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
                 <span>{targetedAdvice ? "本次针对的岗位要求" : "当前内容检查"}</span>
                 <h2 ref={adviceResultRef} tabIndex={-1}>{targetedAdvice ? advice.rewriteProposals.find((proposal) => proposal.requirement)?.requirement : advice.headline}</h2>
                 <small>{advice.provider === "local-rules" ? (advice.modelFallback && advice.fallbackReason ? modelFallbackLabels[advice.fallbackReason] : "当前使用基础分析；不会冒充大模型结果") : "DeepSeek 生成建议；应用前仍需逐条确认"}</small>
-                <span className={styles.creditOutcome} data-charged={Boolean(advice.creditCharged)}>{advice.creditCharged ? `本次使用 1 次额度 · 剩余 ${advice.creditBalance ?? creditBalance} 次` : "本次未扣增强额度"}</span>
+                <span className={styles.creditOutcome} data-charged={Boolean(advice.creditCharged)}>{advice.creditCharged ? `本次使用 ${advice.creditCharged} 简迹点 · 剩余 ${advice.creditBalance ?? creditBalance} 点` : "本次未扣简迹点"}</span>
               </div>
               {advice.rewriteProposals.length > 0 ? (
                 <div className={styles.rewriteProposalList}>
@@ -857,7 +863,7 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
                 <div>{advice.keywords.map((keyword) => <small key={keyword}>{keyword}</small>)}</div>
               </div>}
               <p className={styles.factNote}><AlertCircle size={14} /> {advice.factPolicy}。请核实所有数字、成绩与经历事实。</p>
-              <button className={styles.refreshAdvice} type="button" disabled={adviceLoading} onClick={() => void requestAdvice(adviceFocus ?? undefined)}><RefreshCw size={14} /> {enhancedRequest ? "重新检查 · 1 额度" : "重新检查"}</button>
+              <button className={styles.refreshAdvice} type="button" disabled={adviceLoading} onClick={() => void requestAdvice(adviceFocus ?? undefined)}><RefreshCw size={14} /> {enhancedRequest ? `重新检查 · 最多 ${visibleChargeCap} 点` : "重新检查"}</button>
             </div>
           )}
           {adviceError && <p className={styles.adviceError} role="alert">{adviceError}</p>}
@@ -934,7 +940,7 @@ function writeAdviceRetry(storageKey: string, state: AdviceRetryState) {
 function JobEvidenceCard({
   resume,
   jobFit,
-  chargesCredit,
+  creditChargeCap,
   adviceLoading,
   editButtonRef,
   onEdit,
@@ -943,7 +949,7 @@ function JobEvidenceCard({
 }: {
   resume: ResumeRecord;
   jobFit?: ReturnType<typeof analyzeJobFit>;
-  chargesCredit: boolean;
+  creditChargeCap: number;
   adviceLoading: boolean;
   editButtonRef: RefObject<HTMLButtonElement | null>;
   onEdit: () => void;
@@ -1017,9 +1023,9 @@ function JobEvidenceCard({
                               type="button"
                               disabled={adviceLoading}
                               onClick={() => onRequestRewrite(item.id, evidence.sourceRef!)}
-                              aria-label={`针对岗位要求“${item.requirement.slice(0, 48)}”生成这条原文的改写${chargesCredit ? "，消耗 1 次额度" : ""}`}
+                              aria-label={`针对岗位要求“${item.requirement.slice(0, 48)}”生成这条原文的改写${creditChargeCap ? `，最多消耗 ${creditChargeCap} 简迹点` : ""}`}
                             >
-                              <WandSparkles size={13} /> {chargesCredit ? "针对这条改写 · 1 额度" : "针对这条改写"}
+                              <WandSparkles size={13} /> {creditChargeCap ? `针对这条改写 · 最多 ${creditChargeCap} 点` : "针对这条改写"}
                             </button>
                           )}
                         </div>

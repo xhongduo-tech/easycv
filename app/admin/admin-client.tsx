@@ -83,7 +83,7 @@ export function AdminClient() {
                 <Metric icon={Target} label="目标画像" value={overview.metrics.targetProfiles} note="大学与企业画像" />
                 <Metric icon={Sparkles} label="平均完整度" value={`${overview.metrics.averageProgress}%`} note="基于当前草稿" />
                 <Metric icon={Activity} label="今日增强优化" value={overview.metrics.modelRunsToday} note={`峰值估算成本 ¥${overview.metrics.estimatedModelCostTodayYuan.toFixed(3)}`} />
-                <Metric icon={Coins} label="待使用额度" value={overview.metrics.outstandingAiCredits} note="赠送与已购有效余额" />
+                <Metric icon={Coins} label="待使用简迹点" value={overview.metrics.outstandingAiCredits} note="赠送与已购有效余额" />
               </div>
 
               <div className={styles.dashboardGrid}>

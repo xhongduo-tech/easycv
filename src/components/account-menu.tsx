@@ -31,7 +31,7 @@ export function AccountMenu({ compact = false, returnTo = "/dashboard" }: { comp
       <div className="account-popover">
         <div className="account-summary"><span className="account-avatar">{user.image ? <img src={user.image} alt="" /> : initials(user.name)}</span><div><strong>{user.name}</strong><small>{displayEmail(user.email)}</small></div></div>
         <Link className="account-menu-item" href="/dashboard"><FileText size={16} /> 我的简历</Link>
-        <Link className="account-menu-item" href="/account#credits"><Coins size={16} /> 额度说明</Link>
+        <Link className="account-menu-item" href="/account#credits"><Coins size={16} /> 简迹点</Link>
         <Link className="account-menu-item" href="/account"><Settings size={16} /> 账号与安全</Link>
         {user.role === "admin" && <Link className="account-menu-item" href="/admin/users"><ShieldCheck size={16} /> 用户管理</Link>}
         <div className="account-menu-divider" />

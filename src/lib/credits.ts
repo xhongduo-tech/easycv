@@ -4,6 +4,7 @@ import {
   DEEPSEEK_PRICE_VERSION,
   GUEST_AI_TRIALS,
   SIGNUP_AI_CREDITS,
+  calculateAiPointCharge,
   estimateDeepSeekCostMicros,
   type ModelTokenUsage,
 } from "@/lib/pricing";
@@ -23,6 +24,7 @@ export interface CreditReservation {
   requestId: string;
   userId: string;
   lotId: string;
+  reservedCredits: number;
 }
 
 export interface ModelAdviceDelivery {
@@ -297,45 +299,73 @@ export async function reserveAiCredit(
   userId: string,
   requestId: string,
   model: string,
+  requestedCredits = 1,
 ): Promise<CreditReservation | null> {
+  const creditLimit = Math.max(1, Math.trunc(requestedCredits));
   const now = new Date().toISOString();
   const reservation: CreditReservation = {
     id: crypto.randomUUID(),
     requestId,
     userId,
     lotId: "",
+    reservedCredits: creditLimit,
   };
-  const applyReservation = () => db.batch([
+  const applyReservation = (allowPartial: boolean) => db.batch([
     db.prepare(`INSERT INTO ai_credit_ledger
       (id, request_id, user_id, lot_id, credits, status, model, release_reason, created_at, settled_at)
-      SELECT ?, ?, ?, id, 1, 'reserved', ?, NULL, ?, NULL
+      SELECT ?, ?, ?, id, ${allowPartial ? "MIN(remaining_credits, ?)" : "?"}, 'reserved', ?, NULL, ?, NULL
       FROM ai_credit_lots
       WHERE user_id = ?
-        AND remaining_credits > 0
+        AND remaining_credits ${allowPartial ? "> 0" : ">= ?"}
         AND (expires_at IS NULL OR expires_at > ?)
-      ORDER BY CASE WHEN expires_at IS NULL THEN 1 ELSE 0 END, expires_at, created_at, id
+      ORDER BY ${allowPartial ? "remaining_credits DESC," : ""}
+        CASE WHEN expires_at IS NULL THEN 1 ELSE 0 END, expires_at, created_at, id
       LIMIT 1`)
-      .bind(reservation.id, requestId, userId, model, now, userId, now),
+      .bind(
+        reservation.id,
+        requestId,
+        userId,
+        creditLimit,
+        model,
+        now,
+        userId,
+        ...(!allowPartial ? [creditLimit] : []),
+        now,
+      ),
     db.prepare(`UPDATE ai_credit_lots
-      SET remaining_credits = remaining_credits - 1
+      SET remaining_credits = remaining_credits - (
+        SELECT credits FROM ai_credit_ledger WHERE id = ? AND status = 'reserved'
+      )
       WHERE id = (SELECT lot_id FROM ai_credit_ledger WHERE id = ? AND status = 'reserved')
-        AND remaining_credits > 0`)
-      .bind(reservation.id),
+        AND remaining_credits >= (
+          SELECT credits FROM ai_credit_ledger WHERE id = ? AND status = 'reserved'
+        )`)
+      .bind(reservation.id, reservation.id, reservation.id),
   ]);
-  const readReservation = () => db.prepare(`SELECT id, lot_id FROM ai_credit_ledger
+  const readReservation = () => db.prepare(`SELECT id, lot_id, credits FROM ai_credit_ledger
     WHERE request_id = ? AND user_id = ? AND status = 'reserved'`)
     .bind(requestId, userId)
-    .first<{ id: string; lot_id: string }>();
-  const attemptReservation = async () => {
+    .first<{ id: string; lot_id: string; credits: number }>();
+  const attemptReservation = async (allowPartial = false) => {
     try {
-      await applyReservation();
+      await applyReservation(allowPartial);
     } catch (error) {
       const existing = await readReservation().catch(() => null);
-      if (existing) return { ...reservation, id: existing.id, lotId: existing.lot_id };
+      if (existing) return {
+        ...reservation,
+        id: existing.id,
+        lotId: existing.lot_id,
+        reservedCredits: existing.credits,
+      };
       throw error;
     }
     const ledger = await readReservation();
-    return ledger ? { ...reservation, id: ledger.id, lotId: ledger.lot_id } : null;
+    return ledger ? {
+      ...reservation,
+      id: ledger.id,
+      lotId: ledger.lot_id,
+      reservedCredits: ledger.credits,
+    } : null;
   };
 
   // The overwhelmingly common success path should not pay two cleanup writes
@@ -345,7 +375,12 @@ export async function reserveAiCredit(
   const reserved = await attemptReservation();
   if (reserved) return reserved;
   await releaseStaleCreditReservations(db, userId);
-  return attemptReservation();
+  const recovered = await attemptReservation();
+  if (recovered) return recovered;
+  // A balance can be split across several nearly exhausted lots. Reserve the
+  // largest remaining lot and cap the eventual charge at that frozen amount;
+  // the platform absorbs any calculated overage instead of stranding points.
+  return attemptReservation(true);
 }
 
 export async function commitAiCredit(db: Database, reservation: CreditReservation) {
@@ -363,23 +398,34 @@ export async function settleAiCreditForModelRun(
   reservation: CreditReservation,
   model: string,
   usage: ModelTokenUsage,
+  chargedCredits: number,
   delivery: ModelAdviceDelivery,
 ) {
+  const finalCredits = Math.min(
+    reservation.reservedCredits,
+    calculateAiPointCharge(model, usage),
+  );
+  if (Math.trunc(chargedCredits) !== finalCredits) {
+    throw new Error("AI point charge does not match the metered model usage");
+  }
   const settledAt = new Date().toISOString();
   const applySettlement = async () => {
     const results = await db.batch([
       db.prepare(`UPDATE ai_credit_ledger
-        SET status = 'consumed', settled_at = ?
+        SET credits = ?, status = 'consumed', settled_at = ?
         WHERE id = ? AND user_id = ? AND request_id = ? AND status = 'reserved'
+          AND credits = ?
           AND EXISTS (
             SELECT 1 FROM model_run_costs
             WHERE request_id = ? AND status = 'running' AND credit_ledger_id = ai_credit_ledger.id
           )`)
         .bind(
+          finalCredits,
           settledAt,
           reservation.id,
           reservation.userId,
           reservation.requestId,
+          reservation.reservedCredits,
           reservation.requestId,
         ),
       db.prepare(`UPDATE model_run_costs SET
@@ -451,7 +497,8 @@ export async function settleAiCreditForModelRun(
         model_run_costs.status AS run_status,
         ai_credit_ledger.status AS ledger_status,
         model_advice_deliveries.attempt_state AS attempt_state,
-        model_advice_deliveries.response_json AS response_json
+        model_advice_deliveries.response_json AS response_json,
+        ai_credit_ledger.credits AS credits
       FROM model_run_costs
       JOIN ai_credit_ledger ON ai_credit_ledger.id = model_run_costs.credit_ledger_id
       JOIN model_advice_deliveries ON model_advice_deliveries.request_id = model_run_costs.request_id
@@ -464,9 +511,16 @@ export async function settleAiCreditForModelRun(
         delivery.userId,
         delivery.requestFingerprint,
       )
-      .first<{ run_status: string; ledger_status: string; attempt_state: string; response_json: string }>();
+      .first<{
+        run_status: string;
+        ledger_status: string;
+        attempt_state: string;
+        response_json: string;
+        credits: number;
+      }>();
     return settled?.run_status === "succeeded"
       && settled.ledger_status === "consumed"
+      && settled.credits === finalCredits
       && settled.attempt_state === "succeeded"
       && settled.response_json === delivery.responseJson;
   };
@@ -518,23 +572,17 @@ export async function settleFailedAiCreditForModelRun(
         WHERE request_id = ? AND user_id = ? AND status = 'running'`)
         .bind(safeFailureKind, settledAt, reservation.requestId, reservation.userId);
     const results = await db.batch([
-      db.prepare(`UPDATE ai_credit_lots
-        SET remaining_credits = remaining_credits + 1
-        WHERE id = ?
-          AND EXISTS (
-            SELECT 1 FROM ai_credit_ledger
-            WHERE id = ? AND user_id = ? AND lot_id = ai_credit_lots.id AND status = 'reserved'
-          )`)
-        .bind(reservation.lotId, reservation.id, reservation.userId),
       db.prepare(`UPDATE ai_credit_ledger
         SET status = 'released', release_reason = ?, settled_at = ?
-        WHERE id = ? AND user_id = ? AND request_id = ? AND status = 'reserved'`)
+        WHERE id = ? AND user_id = ? AND request_id = ? AND status = 'reserved'
+          AND credits = ?`)
         .bind(
           safeFailureKind,
           settledAt,
           reservation.id,
           reservation.userId,
           reservation.requestId,
+          reservation.reservedCredits,
         ),
       costStatement,
       db.prepare(`INSERT INTO model_advice_deliveries
@@ -583,8 +631,7 @@ export async function settleFailedAiCreditForModelRun(
         ),
     ]);
     return resultChanges(results[0]) === 1
-      && resultChanges(results[1]) === 1
-      && resultChanges(results[3]) === 1;
+      && resultChanges(results[2]) === 1;
   };
   const isSettled = async () => {
     const row = await db.prepare(`SELECT ai_credit_ledger.status AS ledger_status,
@@ -637,63 +684,32 @@ export async function releaseAiCredit(
   reason: string,
 ) {
   const settledAt = new Date().toISOString();
-  await db.batch([
-    db.prepare(`UPDATE ai_credit_lots
-      SET remaining_credits = remaining_credits + 1
-      WHERE id = ?
-        AND EXISTS (
-          SELECT 1 FROM ai_credit_ledger
-          WHERE id = ? AND user_id = ? AND lot_id = ai_credit_lots.id AND status = 'reserved'
-        )`)
-      .bind(reservation.lotId, reservation.id, reservation.userId),
-    db.prepare(`UPDATE ai_credit_ledger
-      SET status = 'released', release_reason = ?, settled_at = ?
-      WHERE id = ? AND user_id = ? AND status = 'reserved'`)
-      .bind(reason.slice(0, 80), settledAt, reservation.id, reservation.userId),
-  ]);
+  await db.prepare(`UPDATE ai_credit_ledger
+    SET status = 'released', release_reason = ?, settled_at = ?
+    WHERE id = ? AND user_id = ? AND status = 'reserved' AND credits = ?`)
+    .bind(
+      reason.slice(0, 80),
+      settledAt,
+      reservation.id,
+      reservation.userId,
+      reservation.reservedCredits,
+    )
+    .run();
 }
 
 export async function releaseStaleCreditReservations(db: Database, userId: string) {
   const cutoff = new Date(Date.now() - CREDIT_RESERVATION_TTL_MS).toISOString();
   const settledAt = new Date().toISOString();
-  await db.batch([
-    db.prepare(`UPDATE ai_credit_lots
-      SET remaining_credits = remaining_credits + COALESCE((
-        SELECT SUM(credits) FROM ai_credit_ledger
-        WHERE ai_credit_ledger.lot_id = ai_credit_lots.id
-          AND ai_credit_ledger.user_id = ?
-          AND ai_credit_ledger.status = 'reserved'
-          AND ai_credit_ledger.created_at < ?
-          AND NOT EXISTS (
-            SELECT 1 FROM model_run_costs
-            WHERE model_run_costs.request_id = ai_credit_ledger.request_id
-              AND model_run_costs.status IN ('running','succeeded')
-          )
-      ), 0)
-      WHERE user_id = ?
-        AND EXISTS (
-          SELECT 1 FROM ai_credit_ledger
-          WHERE ai_credit_ledger.lot_id = ai_credit_lots.id
-            AND ai_credit_ledger.user_id = ?
-            AND ai_credit_ledger.status = 'reserved'
-            AND ai_credit_ledger.created_at < ?
-            AND NOT EXISTS (
-              SELECT 1 FROM model_run_costs
-              WHERE model_run_costs.request_id = ai_credit_ledger.request_id
-                AND model_run_costs.status IN ('running','succeeded')
-            )
-        )`)
-      .bind(userId, cutoff, userId, userId, cutoff),
-    db.prepare(`UPDATE ai_credit_ledger
-      SET status = 'released', release_reason = 'reservation-expired', settled_at = ?
-      WHERE user_id = ? AND status = 'reserved' AND created_at < ?
-        AND NOT EXISTS (
-          SELECT 1 FROM model_run_costs
-          WHERE model_run_costs.request_id = ai_credit_ledger.request_id
-            AND model_run_costs.status IN ('running','succeeded')
-        )`)
-      .bind(settledAt, userId, cutoff),
-  ]);
+  await db.prepare(`UPDATE ai_credit_ledger
+    SET status = 'released', release_reason = 'reservation-expired', settled_at = ?
+    WHERE user_id = ? AND status = 'reserved' AND created_at < ?
+      AND NOT EXISTS (
+        SELECT 1 FROM model_run_costs
+        WHERE model_run_costs.request_id = ai_credit_ledger.request_id
+          AND model_run_costs.status IN ('running','succeeded')
+      )`)
+    .bind(settledAt, userId, cutoff)
+    .run();
 }
 
 export async function getGuestTrialBalance(db: Database, userId: string) {

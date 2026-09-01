@@ -10,7 +10,7 @@ const GUEST_GRACE_MS = 7 * DAY_MS;
 const USAGE_TTL_MS = 2 * DAY_MS;
 
 /** One due-count read, four recovery statements, and thirty-one bounded writes. */
-export const RETENTION_MAINTENANCE_STATEMENT_BUDGET = 36;
+export const RETENTION_MAINTENANCE_STATEMENT_BUDGET = 35;
 
 export async function runRetentionMaintenance(
   db: Database,

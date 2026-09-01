@@ -41,7 +41,12 @@ import {
   type CreditReservation,
   type ModelAdviceDelivery,
 } from "@/lib/credits";
-import { isOneCreditDeepSeekModel, type ModelTokenUsage } from "@/lib/pricing";
+import {
+  calculateAiPointCharge,
+  isMeteredDeepSeekModel,
+  MAX_AI_POINTS_PER_REQUEST,
+  type ModelTokenUsage,
+} from "@/lib/pricing";
 import { reserveModelRunBudget } from "@/lib/model-budget";
 import {
   expireExistingModelAttempt,
@@ -81,7 +86,7 @@ export async function GET(request: Request) {
   try {
     await ensureDatabase();
     const configuredModel = getDeepSeekAdvisorConfig(env);
-    const modelConfig = configuredModel && isOneCreditDeepSeekModel(configuredModel.model)
+    const modelConfig = configuredModel && isMeteredDeepSeekModel(configuredModel.model)
       ? configuredModel
       : null;
     const db = getDatabase();
@@ -94,6 +99,7 @@ export async function GET(request: Request) {
         modelAvailable: await isCurrentModelAvailable(db),
         modelProvider: modelConfig ? "deepseek" : null,
         modelSupportsImages: modelConfig?.model === "deepseek-v4-flash-vision-exp",
+        maxCreditCharge: MAX_AI_POINTS_PER_REQUEST,
         ...access,
       },
       { headers: { "cache-control": "private, no-store" } },
@@ -273,7 +279,7 @@ export async function POST(request: Request) {
     }
 
     const configuredModel = getDeepSeekAdvisorConfig(env);
-    const modelConfig = configuredModel && isOneCreditDeepSeekModel(configuredModel.model)
+    const modelConfig = configuredModel && isMeteredDeepSeekModel(configuredModel.model)
       ? configuredModel
       : null;
     let provider = "local-rules";
@@ -319,6 +325,13 @@ export async function POST(request: Request) {
       const preparedModelRequest = modelInputBytes <= MAX_MODEL_INPUT_BYTES
         ? prepareDeepSeekAdviceRequest(advisorInput, modelConfig)
         : null;
+      const calculatedReservation = preparedModelRequest
+        ? calculateAiPointCharge(modelConfig.model, {
+            inputTokens: preparedModelRequest.inputTokenUpperBound,
+            cachedInputTokens: 0,
+            outputTokens: DEEPSEEK_MAX_OUTPUT_TOKENS,
+          })
+        : 0;
       if (access.creditBalance < 1) {
         modelFallback = true;
         fallbackReason = session.kind === "guest" ? "login-required" : "no-credits";
@@ -369,6 +382,7 @@ export async function POST(request: Request) {
                 session.userId,
                 usageEventId,
                 modelConfig.model,
+                Math.min(access.creditBalance, calculatedReservation),
               );
               if (!creditReservation) {
                 await db.prepare("DELETE FROM model_usage_events WHERE id = ?")
@@ -441,12 +455,17 @@ export async function POST(request: Request) {
                     );
                     const { modelUsage, ...modelAdvice } = modelResult;
                     billableUsage = modelUsage;
+                    const settledCreditCharge = Math.min(
+                      creditReservation.reservedCredits,
+                      calculateAiPointCharge(modelConfig.model, modelUsage),
+                    );
                     const deliveryCreatedAt = new Date();
                     const responsePayload = {
                       ...modelAdvice,
                       provider: providerKey,
                       modelFallback: false,
-                      creditCharged: 1,
+                      creditCharged: settledCreditCharge,
+                      creditChargeCap: creditReservation.reservedCredits,
                       baseResumeRevision: resume.revision,
                       baseBriefRevision: targetBrief?.revision ?? 0,
                       factPolicy: "建议不会自动改写；所有事实和数字都需由你核实",
@@ -462,6 +481,7 @@ export async function POST(request: Request) {
                       creditReservation,
                       modelConfig.model,
                       modelUsage,
+                      settledCreditCharge,
                       {
                         userId: session.userId,
                         resumeId: resume.id,
@@ -476,7 +496,7 @@ export async function POST(request: Request) {
                     settledResponseJson = responseJson;
                     result = modelAdvice;
                     provider = providerKey;
-                    creditCharged = 1;
+                    creditCharged = settledCreditCharge;
                     await resetProviderCircuit(db, providerKey).catch(() => undefined);
                   } catch (error) {
                     if (error instanceof AiCreditSettlementUncertainError) throw error;
@@ -571,7 +591,7 @@ export async function POST(request: Request) {
     }
     // A successful provider run necessarily passed the circuit check and its
     // success reset. Avoid rereading the same provider row on the hot path.
-    const modelAvailable = creditCharged === 1
+    const modelAvailable = creditCharged > 0
       ? true
       : await isCurrentModelAvailable(db).catch(() => false);
     return withSessionCookie(
@@ -913,7 +933,7 @@ async function isProviderCircuitOpen(db: ReturnType<typeof getDatabase>, provide
 
 async function isCurrentModelAvailable(db: ReturnType<typeof getDatabase>) {
   const config = getDeepSeekAdvisorConfig(env);
-  if (!config || !isOneCreditDeepSeekModel(config.model)) return false;
+  if (!config || !isMeteredDeepSeekModel(config.model)) return false;
   return !await isProviderCircuitOpen(db, `deepseek:${config.model}`);
 }
 

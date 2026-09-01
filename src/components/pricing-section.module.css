@@ -134,6 +134,7 @@
 }
 
 .rule svg { flex: none; color: var(--success); }
+.rule a { color: var(--brand); font-weight: 760; text-decoration: underline; text-underline-offset: 3px; }
 
 .compact { padding-top: 90px; }
 

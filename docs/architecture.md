@@ -150,11 +150,11 @@ Advisor 在平台 API 内提供两层能力：默认确定性规则分析，以�
 - 外部调用使用 DeepSeek 无状态 Responses API、JSON Schema 结构化输出、关闭思考模式和 25 秒超时，响应仍经过本地 Zod 校验。
 - 模型不能自行决定证据来源：原文定位必须匹配服务端提供的候选，岗位要求与引用证据由确定性证据地图重新绑定。只有严格等于已审计确定性压缩规则结果的草稿可直接应用；自由改写、伪造定位、占位符或缺失事实未清空的草稿不会直接落盘。
 - 概览分析通过显式字段投影移除姓名、邮箱、电话、教育/经历所在地和项目链接；其他请求只发送目标章节和最小必要上下文。
-- 调用前先限制原始模型输入为 32 KB，再对脱敏、字段投影和候选展开后的精确 provider body 重新计量；UTF-8 字节数加 10,000 token envelope 必须不超过 50,000 的保守输入上界，输出固定最多 2,200 token，随后按同一上下界预占日成本。公开的一次一额度产品只允许走 DeepSeek V4 Flash，避免 Pro 误用同一价格；单条 D1 条件插入同时检查会话、散列网络标识与全局配额，不存在跨桶部分扣减。
+- 调用前先限制原始模型输入为 32 KB，再对脱敏、字段投影和候选展开后的精确 provider body 重新计量；UTF-8 字节数加 10,000 token envelope 必须不超过 50,000 的保守输入上界，输出固定最多 2,200 token，随后按同一上下界预占日成本与 1–5 简迹点上限。公开点数价格表只允许走 DeepSeek V4 Flash，避免 Pro 误用同一价格；单条 D1 条件插入同时检查会话、散列网络标识与全局配额，不存在跨桶部分扣减。
 - owner lease 限制同一账号只能有一个模型或账号生命周期操作，全局租约限制为 4 路；送模前续期并在同一条件 INSERT 中再次验证 lease、reserved ledger 与 prepared delivery，旧 Worker 丢失租约后不能恢复送模。客户端中断会传递给上游，过期租约可由后续请求接管。
 - 同一模型连续三次网络、超时、鉴权/余额/模型配置、429 或 5xx 错误后开启 10 分钟熔断；内容拒答、普通请求错误与输出校验失败只回退当前请求，不允许用户内容触发全局停用。
 - 模型未配置或调用失败时返回 `local-rules`，前端明确显示基础模式，不伪装成大模型结果。
-- 免费编辑、基础分析与导出不受商业额度影响。DeepSeek 增强优化按成功请求计 1 次：`ai_credit_lots` 保存赠送/购买批次和到期日，`ai_credit_ledger` 以 request ID 幂等关联预占、结算或释放；超过两分钟且没有 running/succeeded 成本记录的悬挂预占才可回收。
+- 免费编辑、基础分析与导出不受商业点数影响。DeepSeek 增强优化先按最终输入上界与最大输出冻结最多 5 简迹点，成功后使用实际 input/cache/output token 按固定峰值价格版本结算，最低 1 点；数据库触发器在 ledger 从 `reserved` 转为 `consumed` 时原子返还差额，从 `reserved` 转为 `released` 时全额返还。`ai_credit_lots` 保存赠送/购买批次和到期日，`ai_credit_ledger` 以 request ID 幂等关联预占、结算或释放；超过两分钟且没有 running/succeeded 成本记录的悬挂预占才可回收。
 - `model_run_costs` 保存模型、运行状态、严格校验的 input/output/cache token、价格版本和估算人民币成本，不保存简历文本；`model_advice_deliveries` 使用 prepared → provider_started → settlement_pending → succeeded/fallback/abandoned/expired 状态机。成功扣费与结果、失败退款与 fallback 分别在同一个 D1 batch 内结算。15 分钟后停止重放并擦除正文，90 天后删除最小幂等 tombstone与成本明细，账号删除时立即去标识化。纯本地分析和预占前拒绝的请求不写 delivery。商业余额、滥用频率限制与全站日成本预算是三套独立闸门。
 - retention 与 reconciliation 都是独立 Bearer 保护任务。retention 每次直接执行一批有界维护并由调度器循环至积压归零；reconciliation 默认只读预览、显式 `apply=true` 才恢复。对账取得 owner lease 并重新检查状态后才恢复，维护不会与正在重试的请求竞争。
 - 启动赠额通过独立服务端 pepper 对所有已验证登录身份做 HMAC 后写入 `signup_promo_redemptions`，以阻止删号或更换另一种登录身份重领；不保存身份明文，任一身份已领取时均不再次赠送，领取摘要到 730 天后由每日维护任务删除，删号时随机化账号关联但不提前删除摘要。生产环境缺少独立 pepper 时认证配置会拒绝启动。

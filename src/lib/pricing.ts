@@ -1,22 +1,31 @@
-export const SIGNUP_AI_CREDITS = 5;
-export const GUEST_AI_TRIALS = 1;
+export const SIGNUP_AI_CREDITS = 25;
+export const GUEST_AI_TRIALS = 5;
 export const PURCHASE_CREDIT_VALIDITY_DAYS = 365;
 export const CREDIT_RESERVATION_TTL_MS = 2 * 60 * 1000;
 // Payment-provider and merchant credentials are intentionally not simulated.
 export const CHECKOUT_AVAILABLE = false;
 
+/**
+ * One Jianji point may carry at most ¥0.034 of normalized model cost. At the
+ * cheapest public pack (¥69.9 / 1,000 points), this leaves just over 51% model
+ * gross margin before payment, hosting, tax, support and failed-call costs.
+ */
+export const AI_POINT_COST_ALLOWANCE_MICROS = 34_000;
+export const MAX_AI_POINTS_PER_REQUEST = 5;
+export const AI_POINT_BILLING_VERSION = "jianji-points-v1-2026-09-01";
+
 export const AI_CREDIT_PACKS = [
   {
     id: "light",
     name: "轻量包",
-    credits: 20,
+    credits: 100,
     priceFen: 990,
-    description: "完成一份简历的主要章节精修",
+    description: "适合完成一份简历的主要章节精修",
   },
   {
     id: "standard",
     name: "标准包",
-    credits: 80,
+    credits: 400,
     priceFen: 3_490,
     description: "适合一个求职季的多岗位版本",
     badge: "推荐",
@@ -24,7 +33,7 @@ export const AI_CREDIT_PACKS = [
   {
     id: "sprint",
     name: "冲刺包",
-    credits: 200,
+    credits: 1_000,
     priceFen: 6_990,
     description: "适合密集投递与长期多版本迭代",
     badge: "单次更省",
@@ -53,7 +62,7 @@ export function publicCreditPacks(): PublicCreditPack[] {
     return {
       ...pack,
       priceLabel: formatYuan(pack.priceFen),
-      unitPriceLabel: `¥${(unitPriceYuan + 1e-9).toFixed(3)}/次`,
+      unitPriceLabel: `${formatPointUnitPrice(unitPriceYuan)}/点`,
       savingPercent: Math.round((1 - unitPriceFen / baseline) * 1000) / 10,
     };
   });
@@ -64,6 +73,10 @@ export function formatYuan(priceFen: number) {
   return `¥${Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1)}`;
 }
 
+function formatPointUnitPrice(value: number) {
+  return `¥${(value + 1e-10).toFixed(4).replace(/0+$/, "").replace(/\.$/, "")}`;
+}
+
 export const DEEPSEEK_PRICE_VERSION = "deepseek-v4-peak-cny-2026-08-16";
 
 export interface ModelTokenUsage {
@@ -72,14 +85,16 @@ export interface ModelTokenUsage {
   outputTokens: number;
 }
 
-const peakRates = {
-  "deepseek-v4-flash": { inputMiss: 3, inputCache: 0.1, output: 9 },
-  "deepseek-v4-flash-vision-exp": { inputMiss: 3, inputCache: 0.1, output: 9 },
-  "deepseek-v4-pro": { inputMiss: 9, inputCache: 0.3, output: 27 },
+// Integer tenths of a micro-yuan avoid floating-point drift at the ¥0.10 / M
+// cached-input rate. Division happens once, at the final public unit boundary.
+const peakRatesTenthsOfMicroYuan = {
+  "deepseek-v4-flash": { inputMiss: 30, inputCache: 1, output: 90 },
+  "deepseek-v4-flash-vision-exp": { inputMiss: 30, inputCache: 1, output: 90 },
+  "deepseek-v4-pro": { inputMiss: 90, inputCache: 3, output: 270 },
 } as const;
 
-/** The public one-credit price is costed only for the text Flash tier. */
-export function isOneCreditDeepSeekModel(model: string) {
+/** Public metered-point pricing is currently available only for text Flash. */
+export function isMeteredDeepSeekModel(model: string) {
   return model === "deepseek-v4-flash";
 }
 
@@ -88,14 +103,28 @@ export function isOneCreditDeepSeekModel(model: string) {
  * token rate, each token costs the same numeric number of micro-yuan.
  */
 export function estimateDeepSeekCostMicros(model: string, usage: ModelTokenUsage) {
-  const rates = peakRates[model as keyof typeof peakRates] ?? peakRates["deepseek-v4-pro"];
+  return Math.ceil(estimateDeepSeekCostTenthsOfMicroYuan(model, usage) / 10);
+}
+
+function estimateDeepSeekCostTenthsOfMicroYuan(model: string, usage: ModelTokenUsage) {
+  const rates = peakRatesTenthsOfMicroYuan[model as keyof typeof peakRatesTenthsOfMicroYuan];
+  if (!rates) throw new Error(`Unsupported DeepSeek pricing model: ${model}`);
   const inputTokens = positiveInteger(usage.inputTokens);
   const cachedInputTokens = Math.min(inputTokens, positiveInteger(usage.cachedInputTokens));
   const uncachedInputTokens = inputTokens - cachedInputTokens;
-  return Math.round(
-    uncachedInputTokens * rates.inputMiss
-      + cachedInputTokens * rates.inputCache
-      + positiveInteger(usage.outputTokens) * rates.output,
+  return uncachedInputTokens * rates.inputMiss
+    + cachedInputTokens * rates.inputCache
+    + positiveInteger(usage.outputTokens) * rates.output;
+}
+
+/** Converts normalized peak-rate model cost into whole Jianji points. */
+export function calculateAiPointCharge(model: string, usage: ModelTokenUsage) {
+  return Math.max(
+    1,
+    Math.ceil(
+      estimateDeepSeekCostTenthsOfMicroYuan(model, usage)
+        / (AI_POINT_COST_ALLOWANCE_MICROS * 10),
+    ),
   );
 }
 

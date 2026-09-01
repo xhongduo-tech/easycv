@@ -23,31 +23,31 @@ describe("AI credit settlement", () => {
     const db = adapter as unknown as D1Database;
     adapter.sqlite.prepare("INSERT INTO users (id) VALUES (?)").run("user-1");
 
-    expect((await grantSignupCredits(db, "user-1")).total).toBe(5);
-    expect((await grantSignupCredits(db, "user-1")).total).toBe(5);
+    expect((await grantSignupCredits(db, "user-1")).total).toBe(25);
+    expect((await grantSignupCredits(db, "user-1")).total).toBe(25);
 
     const released = await reserveAiCredit(db, "user-1", "request-release", "deepseek-v4-flash");
     expect(released).not.toBeNull();
-    expect((await getCreditBalance(db, "user-1")).total).toBe(4);
+    expect((await getCreditBalance(db, "user-1")).total).toBe(24);
     await releaseAiCredit(db, released!, "provider-error");
     await releaseAiCredit(db, released!, "duplicate-release");
-    expect((await getCreditBalance(db, "user-1")).total).toBe(5);
+    expect((await getCreditBalance(db, "user-1")).total).toBe(25);
 
     const consumed = await reserveAiCredit(db, "user-1", "request-consume", "deepseek-v4-flash");
     expect(consumed).not.toBeNull();
     expect(await commitAiCredit(db, consumed!)).toBe(true);
     expect(await commitAiCredit(db, consumed!)).toBe(false);
-    expect((await getCreditBalance(db, "user-1")).total).toBe(4);
+    expect((await getCreditBalance(db, "user-1")).total).toBe(24);
     expect(adapter.sqlite.prepare("SELECT status FROM ai_credit_ledger WHERE request_id = ?").get("request-consume"))
       .toEqual({ status: "consumed" });
 
     await expect(reserveAiCredit(db, "user-1", "request-consume", "deepseek-v4-flash")).rejects.toThrow();
-    expect((await getCreditBalance(db, "user-1")).total).toBe(4);
+    expect((await getCreditBalance(db, "user-1")).total).toBe(24);
 
     const stale = await reserveAiCredit(db, "user-1", "request-stale", "deepseek-v4-flash");
     adapter.sqlite.prepare("UPDATE ai_credit_ledger SET created_at = ? WHERE id = ?")
       .run("2000-01-01T00:00:00.000Z", stale!.id);
-    expect((await getCreditBalance(db, "user-1", { recoverStale: true })).total).toBe(4);
+    expect((await getCreditBalance(db, "user-1", { recoverStale: true })).total).toBe(24);
     expect(adapter.sqlite.prepare("SELECT status FROM ai_credit_ledger WHERE request_id = ?").get("request-stale"))
       .toEqual({ status: "released" });
   });
@@ -67,9 +67,9 @@ describe("AI credit settlement", () => {
 
     const usage = { inputTokens: 1_000, cachedInputTokens: 100, outputTokens: 200 };
     const delivery = deliveryFor(reservation!);
-    expect(await settleAiCreditForModelRun(db, reservation!, "deepseek-v4-flash", usage, delivery)).toBe(true);
-    expect(await settleAiCreditForModelRun(db, reservation!, "deepseek-v4-flash", usage, delivery)).toBe(true);
-    expect((await getCreditBalance(db, "user-settle")).total).toBe(4);
+    expect(await settleAiCreditForModelRun(db, reservation!, "deepseek-v4-flash", usage, 1, delivery)).toBe(true);
+    expect(await settleAiCreditForModelRun(db, reservation!, "deepseek-v4-flash", usage, 1, delivery)).toBe(true);
+    expect((await getCreditBalance(db, "user-settle")).total).toBe(24);
     expect(adapter.sqlite.prepare(`SELECT l.status AS ledger_status, m.status AS run_status
       FROM ai_credit_ledger l JOIN model_run_costs m ON m.credit_ledger_id = l.id
       WHERE l.id = ?`).get(reservation!.id)).toEqual({
@@ -90,12 +90,13 @@ describe("AI credit settlement", () => {
       missing!,
       "deepseek-v4-flash",
       { inputTokens: 100, cachedInputTokens: 0, outputTokens: 20 },
+      1,
       deliveryFor(missing!),
     )).toBe(false);
     expect(adapter.sqlite.prepare("SELECT status FROM ai_credit_ledger WHERE id = ?").get(missing!.id))
       .toEqual({ status: "reserved" });
     await releaseAiCredit(db, missing!, "missing-model-run");
-    expect((await getCreditBalance(db, "user-no-run")).total).toBe(5);
+    expect((await getCreditBalance(db, "user-no-run")).total).toBe(25);
   });
 
   it("rolls back the consumed ledger if the model-cost update fails", async () => {
@@ -113,6 +114,7 @@ describe("AI credit settlement", () => {
       reservation!,
       "deepseek-v4-flash",
       { inputTokens: 100, cachedInputTokens: 0, outputTokens: 20 },
+      1,
       deliveryFor(reservation!),
     )).rejects.toBeInstanceOf(AiCreditSettlementUncertainError);
     expect(adapter.sqlite.prepare("SELECT status FROM ai_credit_ledger WHERE id = ?").get(reservation!.id))
@@ -133,6 +135,7 @@ describe("AI credit settlement", () => {
       reservation!,
       "deepseek-v4-flash",
       { inputTokens: 100, cachedInputTokens: 0, outputTokens: 20 },
+      1,
       deliveryFor(reservation!),
     )).toBe(true);
     expect(adapter.sqlite.prepare("SELECT status FROM ai_credit_ledger WHERE id = ?").get(reservation!.id))
@@ -159,7 +162,7 @@ describe("AI credit settlement", () => {
       { inputTokens: 900, cachedInputTokens: 100, outputTokens: 12 },
       delivery,
     )).toBe(true);
-    expect((await getCreditBalance(db, "user-failed")).total).toBe(5);
+    expect((await getCreditBalance(db, "user-failed")).total).toBe(25);
     expect(adapter.sqlite.prepare(`SELECT l.status AS ledger_status, l.release_reason,
         m.status AS run_status, m.failure_kind, d.response_json
       FROM ai_credit_ledger l
@@ -172,6 +175,35 @@ describe("AI credit settlement", () => {
       failure_kind: "provider-timeout",
       response_json: delivery.responseJson,
     });
+  });
+
+  it("freezes the maximum and atomically refunds the unused Jianji points", async () => {
+    const adapter = createTestDatabase();
+    const db = adapter as unknown as D1Database;
+    adapter.sqlite.prepare("INSERT INTO users (id) VALUES (?)").run("user-metered");
+    await grantSignupCredits(db, "user-metered");
+    const reservation = await reserveAiCredit(
+      db,
+      "user-metered",
+      "request-metered",
+      "deepseek-v4-flash",
+      5,
+    );
+    expect(reservation?.reservedCredits).toBe(5);
+    expect((await getCreditBalance(db, "user-metered")).total).toBe(20);
+    insertRunningModelCost(adapter.sqlite, reservation!);
+
+    expect(await settleAiCreditForModelRun(
+      db,
+      reservation!,
+      "deepseek-v4-flash",
+      { inputTokens: 8_000, cachedInputTokens: 0, outputTokens: 2_200 },
+      2,
+      deliveryFor(reservation!),
+    )).toBe(true);
+    expect((await getCreditBalance(db, "user-metered")).total).toBe(23);
+    expect(adapter.sqlite.prepare(`SELECT credits, status FROM ai_credit_ledger
+      WHERE id = ?`).get(reservation!.id)).toEqual({ credits: 2, status: "consumed" });
   });
 
   it("rolls back the refund when the terminal failure delivery cannot be stored", async () => {
@@ -198,7 +230,7 @@ describe("AI credit settlement", () => {
       undefined,
       deliveryFor(reservation!),
     )).rejects.toBeInstanceOf(AiCreditSettlementUncertainError);
-    expect((await getCreditBalance(db, "user-failure-rollback")).total).toBe(4);
+    expect((await getCreditBalance(db, "user-failure-rollback")).total).toBe(24);
     expect(adapter.sqlite.prepare(`SELECT l.status AS ledger_status, m.status AS run_status,
         d.response_json
       FROM ai_credit_ledger l
@@ -234,7 +266,7 @@ describe("AI credit settlement", () => {
       undefined,
       deliveryFor(reservation!),
     )).toBe(true);
-    expect((await getCreditBalance(db, "user-failure-ambiguous")).total).toBe(5);
+    expect((await getCreditBalance(db, "user-failure-ambiguous")).total).toBe(25);
     expect(adapter.sqlite.prepare("SELECT status FROM ai_credit_ledger WHERE id = ?").get(reservation!.id))
       .toEqual({ status: "released" });
   });
@@ -244,7 +276,7 @@ describe("AI credit settlement", () => {
     const db = adapter as unknown as D1Database;
     const identityHash = identityHashFor("verified@example.com");
     adapter.sqlite.prepare("INSERT INTO users (id) VALUES (?)").run("first-account");
-    expect((await ensureSignupCredits(db, "first-account", { identityHashes: [identityHash] })).total).toBe(5);
+    expect((await ensureSignupCredits(db, "first-account", { identityHashes: [identityHash] })).total).toBe(25);
     adapter.sqlite.prepare("DELETE FROM users WHERE id = ?").run("first-account");
     adapter.sqlite.prepare(`UPDATE signup_promo_redemptions
       SET granted_user_id = 'deleted-promo-test' WHERE identity_hash = ?`).run(identityHash);
@@ -287,7 +319,7 @@ describe("AI credit settlement", () => {
     const second = await getSignupPromoIdentityHashes(db, "phone-second", pepper);
     expect(first).toHaveLength(2);
     expect(second).toHaveLength(2);
-    expect((await ensureSignupCredits(db, "phone-first", { identityHashes: first })).total).toBe(5);
+    expect((await ensureSignupCredits(db, "phone-first", { identityHashes: first })).total).toBe(25);
     expect((await ensureSignupCredits(db, "phone-second", { identityHashes: second })).total).toBe(0);
 
     // The new phone joins the existing redemption cluster, closing a chained
@@ -334,7 +366,7 @@ describe("AI credit settlement", () => {
     const second = await getSignupPromoIdentityHashes(db, "oauth-second", pepper);
     expect(first).toHaveLength(2);
     expect(second).toHaveLength(2);
-    expect((await ensureSignupCredits(db, "oauth-first", { identityHashes: first })).total).toBe(5);
+    expect((await ensureSignupCredits(db, "oauth-first", { identityHashes: first })).total).toBe(25);
     expect((await ensureSignupCredits(db, "oauth-second", { identityHashes: second })).total).toBe(0);
     expect(adapter.sqlite.prepare("SELECT COUNT(*) AS total FROM signup_promo_redemptions").get())
       .toEqual({ total: 3 });
@@ -391,7 +423,7 @@ describe("AI credit settlement", () => {
     const recorded = adapter.sqlite.prepare(`SELECT COUNT(*) AS total
       FROM signup_promo_redemptions`).get();
     expect(recorded).toEqual({ total: 3 });
-    expect((await getCreditBalance(db, "identity-owner")).total).toBe(5);
+    expect((await getCreditBalance(db, "identity-owner")).total).toBe(25);
 
     adapter.sqlite.prepare(`UPDATE signup_promo_redemptions
       SET granted_user_id = 'deleted-promo-identity-owner'
@@ -531,6 +563,17 @@ function createTestDatabase() {
       created_at TEXT NOT NULL,
       expires_at TEXT NOT NULL
     );
+    CREATE TRIGGER trg_ai_credit_ledger_settlement_refund
+    AFTER UPDATE OF status, credits ON ai_credit_ledger
+    WHEN OLD.status = 'reserved' AND NEW.status IN ('consumed','released')
+    BEGIN
+      UPDATE ai_credit_lots
+      SET remaining_credits = remaining_credits + CASE
+        WHEN NEW.status = 'released' THEN OLD.credits
+        ELSE OLD.credits - NEW.credits
+      END
+      WHERE id = OLD.lot_id AND user_id = OLD.user_id;
+    END;
   `);
 
   const prepare = (sql: string) => new TestStatement(sqlite, sql);

@@ -83,7 +83,7 @@ export function AccountClient() {
     });
     const billingTask = fetch("/api/billing")
       .then(async (response) => {
-        if (!response.ok) throw new Error("额度读取失败");
+        if (!response.ok) throw new Error("简迹点读取失败");
         setBilling(await response.json() as BillingState);
         setBillingStatus("ready");
       })
@@ -237,32 +237,32 @@ export function AccountClient() {
         <div className="shell">
           <header className={styles.heading}><div><p className="eyebrow">账号中心</p><h1>账号与安全</h1><p>管理个人资料、登录方式和已登录设备。</p></div><span><ShieldCheck size={18} /> 安全状态正常</span></header>
           {message && <div className={styles.message} data-tone={message.tone} role={message.tone === "error" ? "alert" : "status"}>{message.text}</div>}
-          <nav className={styles.anchorNav} aria-label="账号设置"><a href="#credits">增强额度</a><a href="#profile">个人资料</a><a href="#connections">登录方式</a><a href="#security">密码与邮箱</a><a href="#two-factor">双重验证</a><a href="#sessions">设备会话</a><a href="#data">我的数据</a><a href="#danger">删除账号</a></nav>
+          <nav className={styles.anchorNav} aria-label="账号设置"><a href="#credits">简迹点</a><a href="#profile">个人资料</a><a href="#connections">登录方式</a><a href="#security">密码与邮箱</a><a href="#two-factor">双重验证</a><a href="#sessions">设备会话</a><a href="#data">我的数据</a><a href="#danger">删除账号</a></nav>
 
           <div className={styles.settingsGrid}>
             <section id="credits" className={`${styles.panel} ${styles.widePanel} ${styles.creditPanel}`}>
-              <PanelTitle icon={Coins} title="DeepSeek 增强优化额度" text="基础编辑、模板、检查与导出始终免费；只有成功的增强优化才扣 1 次。" />
+              <PanelTitle icon={Coins} title="DeepSeek 增强优化简迹点" text="基础编辑、模板、检查与导出始终免费；成功的增强优化按实际 Token 用量扣点。" />
               {billingStatus === "ready" && billing ? <div className={styles.creditLayout}>
                 <div className={styles.balanceCard}>
                   <span>当前可用</span>
-                  <strong>{billing.balance.total}<small>次</small></strong>
-                  <p>赠送 {billing.balance.bonus} 次 · 已购 {billing.balance.purchased} 次</p>
+                  <strong>{billing.balance.total}<small>点</small></strong>
+                  <p>赠送 {billing.balance.bonus} 点 · 已购 {billing.balance.purchased} 点</p>
                   <small>{billing.balance.nextExpiryAt
-                    ? `最近一批付费额度 ${new Date(billing.balance.nextExpiryAt).toLocaleDateString("zh-CN")} 到期`
-                    : "赠送额度当前不设期限"}</small>
-                  <Link href="/pricing">查看完整规则 <ArrowRight size={14} /></Link>
+                    ? `最近一批付费点数 ${new Date(billing.balance.nextExpiryAt).toLocaleDateString("zh-CN")} 到期`
+                    : "赠送点数当前不设期限"}</small>
+                  <Link href="/pricing/methodology">查看计费公式 <ArrowRight size={14} /></Link>
                 </div>
                 <div className={styles.accountPacks}>
                   {billing.packs.map((pack) => <article key={pack.id} data-featured={pack.id === "standard"}>
                     <div><strong>{pack.name}</strong>{pack.badge && <span>{pack.badge}</span>}</div>
-                    <p><b>{pack.priceLabel}</b><span>{pack.credits} 次 · {pack.unitPriceLabel}</span></p>
+                    <p><b>{pack.priceLabel}</b><span>{pack.credits} 简迹点 · {pack.unitPriceLabel}</span></p>
                     <button type="button" disabled aria-label={`${pack.name}支付暂未开放`}>暂未开放</button>
                   </article>)}
                 </div>
               </div> : billingStatus === "error" ? (
-                <div className={styles.creditLoading} role="alert">额度暂时无法读取。<button type="button" onClick={() => void loadSecurity()}>重试</button></div>
-              ) : <div className={styles.creditLoading}><LoaderCircle className={styles.spin} size={18} /> 正在读取额度</div>}
-              <p className={styles.creditCaveat}><ShieldCheck size={15} />模型失败、超时、繁忙或回退基础分析时不会扣额度；额度包不自动续费。</p>
+                <div className={styles.creditLoading} role="alert">简迹点暂时无法读取。<button type="button" onClick={() => void loadSecurity()}>重试</button></div>
+              ) : <div className={styles.creditLoading}><LoaderCircle className={styles.spin} size={18} /> 正在读取简迹点</div>}
+              <p className={styles.creditCaveat}><ShieldCheck size={15} />发送前冻结最高点数，完成后按实际 Token 结算；失败、超时或回退不扣点。</p>
             </section>
 
             <section id="profile" className={styles.panel}><PanelTitle icon={UserRound} title="个人资料" text="用于账号菜单和简历工作区，不会自动写入简历正文。" /><form onSubmit={(event) => void updateProfile(event)}><Field label="姓名或称呼" value={name} onChange={setName} autoComplete="name" /><div className={styles.readonlyField}><span>当前账号</span><strong>{displayEmail(user.email)}</strong><small>{user.emailVerified ? "已验证" : "待验证"}</small></div><button className="button button-primary" type="submit" disabled={busy === "profile"}>{busy === "profile" ? <LoaderCircle className={styles.spin} size={16} /> : <Save size={16} />} 保存资料</button></form></section>
@@ -284,7 +284,7 @@ export function AccountClient() {
 
             <section id="sessions" className={`${styles.panel} ${styles.widePanel}`}><PanelTitle icon={Laptop} title="已登录设备" text="发现不认识的设备时，立即撤销对应会话并修改密码。" /><div className={styles.sessionList}>{sessions.map((item) => <div key={item.id}><span><Laptop size={19} /></span><div><strong>{deviceName(item.userAgent)}</strong><small>{item.ipAddress ?? "IP 未记录"} · {new Date(item.createdAt).toLocaleString("zh-CN")}</small></div>{item.token === currentToken ? <span className={styles.currentSession}>当前设备</span> : <button type="button" disabled={busy === item.token} onClick={() => void revokeSession(item.token)}>退出</button>}</div>)}</div>{sessions.length > 1 && <button className="button button-secondary" type="button" disabled={busy === "sessions"} onClick={() => void revokeOthers()}>退出其他所有设备</button>}</section>
 
-            <section id="data" className={`${styles.panel} ${styles.widePanel}`}><PanelTitle icon={Download} title="下载我的数据" text="导出账号资料、全部简历与版本、协议记录和额度流水；不会包含密码、令牌或双重验证密钥。" /><button className="button button-secondary" type="button" disabled={busy === "export"} onClick={() => void downloadAccountData()}>{busy === "export" ? <LoaderCircle className={styles.spin} size={16} /> : <Download size={16} />} 下载 JSON 数据包</button></section>
+            <section id="data" className={`${styles.panel} ${styles.widePanel}`}><PanelTitle icon={Download} title="下载我的数据" text="导出账号资料、全部简历与版本、协议记录和简迹点流水；不会包含密码、令牌或双重验证密钥。" /><button className="button button-secondary" type="button" disabled={busy === "export"} onClick={() => void downloadAccountData()}>{busy === "export" ? <LoaderCircle className={styles.spin} size={16} /> : <Download size={16} />} 下载 JSON 数据包</button></section>
 
             <section id="danger" className={`${styles.panel} ${styles.dangerPanel} ${styles.widePanel}`}><PanelTitle icon={Trash2} title="删除账号与个人数据" text="将永久删除简历、版本记录、账号身份和会话，操作不可恢复。" /><div className={styles.dangerForm}><Field label="账号密码（仅邮箱密码账号需要）" value={deletePassword} onChange={setDeletePassword} type="password" autoComplete="current-password" /><Field label="输入“删除账号”确认" value={deleteConfirm} onChange={setDeleteConfirm} /><button type="button" disabled={busy === "delete" || deleteConfirm !== "删除账号"} onClick={() => void deleteAccount()}><Trash2 size={16} /> 永久删除账号</button></div></section>
           </div>

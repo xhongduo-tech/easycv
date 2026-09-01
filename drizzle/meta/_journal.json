@@ -85,6 +85,13 @@
       "when": 1788213600000,
       "tag": "0011_integrity_constraints",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1788253200000,
+      "tag": "0012_metered_jianji_points",
+      "breakpoints": true
     }
   ]
 }

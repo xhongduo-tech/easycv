@@ -47,7 +47,7 @@ describe("recommendation D1 statement budget", () => {
       provider: "deepseek:deepseek-v4-flash",
       modelFallback: false,
       creditCharged: 1,
-      creditBalance: 4,
+      creditBalance: 24,
       modelAvailable: true,
     });
     expect(database.statements.some((sql) => /FROM\s+[`"]?auth_sessions/i.test(sql))).toBe(true);
@@ -80,7 +80,7 @@ describe("recommendation D1 statement budget", () => {
     expect(await response.json()).toMatchObject({
       modelFallback: false,
       creditCharged: 1,
-      creditBalance: 4,
+      creditBalance: 24,
     });
     expect(database.settlementFaultsInjected).toBe(faults.length);
     expect(database.statements).toHaveLength(expectedStatements);
@@ -88,9 +88,9 @@ describe("recommendation D1 statement budget", () => {
   });
 
   it.each([
-    ["rolls back after the last write", ["rollback"] as const, 49],
-    ["commits but loses the batch acknowledgement", ["ack-uncertain"] as const, 45],
-    ["rolls back once, then commits without an acknowledgement", ["rollback", "ack-uncertain"] as const, 50],
+    ["rolls back after the last write", ["rollback"] as const, 47],
+    ["commits but loses the batch acknowledgement", ["ack-uncertain"] as const, 44],
+    ["rolls back once, then commits without an acknowledgement", ["rollback", "ack-uncertain"] as const, 48],
   ])("keeps a cold slot-four failed-model settlement within 50 statements when it %s", async (
     _scenario,
     faults,
@@ -113,7 +113,7 @@ describe("recommendation D1 statement budget", () => {
       modelFallback: true,
       fallbackReason: "provider-error",
       creditCharged: 0,
-      creditBalance: 5,
+      creditBalance: 25,
     });
     expect(database.settlementFaultsInjected).toBe(faults.length);
     expect(database.statements).toHaveLength(expectedStatements);
@@ -234,7 +234,7 @@ function seedSuccessfulRequest(sqlite: DatabaseSync) {
     .run(expiresAt, SESSION_TOKEN, nowIso, nowIso, USER_ID, nowIso);
   sqlite.prepare(`INSERT INTO legal_acceptances
       (id, user_id, terms_version, privacy_version, acceptance_method, accepted_at)
-    VALUES ('budget-legal', ?, 'terms-2026-09-01-v1', 'privacy-2026-09-01-v1', 'consent-page', ?)`)
+    VALUES ('budget-legal', ?, 'terms-2026-09-01-v2', 'privacy-2026-09-01-v1', 'consent-page', ?)`)
     .run(USER_ID, nowIso);
 
   // The catalog is intentionally left empty. This dangling catalog reference
@@ -401,8 +401,8 @@ class CountingD1Statement {
 
   isSettlement(kind: SettlementKind) {
     return kind === "success"
-      ? /UPDATE\s+ai_credit_ledger\s+SET\s+status\s*=\s*'consumed'/i.test(this.sql)
-      : /UPDATE\s+ai_credit_lots\s+SET\s+remaining_credits\s*=\s*remaining_credits\s*\+\s*1/i.test(this.sql);
+      ? /UPDATE\s+ai_credit_ledger\s+SET[\s\S]*status\s*=\s*'consumed'/i.test(this.sql)
+      : /UPDATE\s+ai_credit_ledger\s+SET[\s\S]*status\s*=\s*'released'/i.test(this.sql);
   }
 
   private executeRun() {

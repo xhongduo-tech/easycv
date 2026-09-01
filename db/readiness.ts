@@ -31,7 +31,7 @@ export const REQUIRED_DATABASE_TABLES = [
   "audit_events",
 ] as const;
 
-export const CURRENT_SCHEMA_VERSION = 11;
+export const CURRENT_SCHEMA_VERSION = 12;
 
 const requiredTableList = REQUIRED_DATABASE_TABLES.map((name) => `'${name}'`).join(", ");
 

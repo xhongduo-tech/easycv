@@ -45,20 +45,6 @@ export async function recoverAbandonedModelAttempt(
 ) {
   const now = new Date().toISOString();
   await db.batch([
-    db.prepare(`UPDATE ai_credit_lots
-      SET remaining_credits = remaining_credits + COALESCE((
-        SELECT credits FROM ai_credit_ledger
-        WHERE request_id = ? AND user_id = ?
-          AND lot_id = ai_credit_lots.id AND status = 'reserved'
-      ), 0)
-      WHERE EXISTS (
-        SELECT 1 FROM ai_credit_ledger
-        WHERE request_id = ? AND user_id = ?
-          AND lot_id = ai_credit_lots.id AND status = 'reserved'
-      )
-        AND NOT EXISTS (SELECT 1 FROM model_run_costs
-          WHERE request_id = ? AND user_id = ? AND status = 'succeeded')`)
-      .bind(requestId, userId, requestId, userId, requestId, userId),
     db.prepare(`UPDATE ai_credit_ledger
       SET status = 'released', release_reason = 'abandoned-request', settled_at = ?
       WHERE request_id = ? AND user_id = ? AND status = 'reserved'
@@ -99,18 +85,6 @@ export async function expireExistingModelAttempt(
 ) {
   const now = new Date().toISOString();
   await db.batch([
-    db.prepare(`UPDATE ai_credit_lots
-      SET remaining_credits = remaining_credits + COALESCE((
-        SELECT credits FROM ai_credit_ledger
-        WHERE request_id = ? AND user_id = ?
-          AND lot_id = ai_credit_lots.id AND status = 'reserved'
-      ), 0)
-      WHERE EXISTS (
-        SELECT 1 FROM ai_credit_ledger
-        WHERE request_id = ? AND user_id = ?
-          AND lot_id = ai_credit_lots.id AND status = 'reserved'
-      )`)
-      .bind(requestId, userId, requestId, userId),
     db.prepare(`UPDATE ai_credit_ledger
       SET status = 'released', release_reason = 'idempotency-expired', settled_at = ?
       WHERE request_id = ? AND user_id = ? AND status = 'reserved'`)
@@ -146,21 +120,6 @@ export async function recoverExpiredPendingDeliveries(
           AND model_run_costs.status = 'succeeded')
     ORDER BY expires_at, request_id LIMIT ?`;
   const results = await db.batch([
-    db.prepare(`UPDATE ai_credit_lots
-      SET remaining_credits = remaining_credits + COALESCE((
-        SELECT SUM(ai_credit_ledger.credits)
-        FROM ai_credit_ledger
-        WHERE ai_credit_ledger.lot_id = ai_credit_lots.id
-          AND ai_credit_ledger.status = 'reserved'
-          AND ai_credit_ledger.request_id IN (${expiredSelector})
-      ), 0)
-      WHERE EXISTS (
-        SELECT 1 FROM ai_credit_ledger
-        WHERE ai_credit_ledger.lot_id = ai_credit_lots.id
-          AND ai_credit_ledger.status = 'reserved'
-          AND ai_credit_ledger.request_id IN (${expiredSelector})
-      )`)
-      .bind(now, batchLimit, now, batchLimit),
     db.prepare(`UPDATE ai_credit_ledger
       SET status = 'released', release_reason = 'pending-expired', settled_at = ?
       WHERE status = 'reserved' AND request_id IN (
@@ -179,6 +138,6 @@ export async function recoverExpiredPendingDeliveries(
       WHERE request_id IN (${expiredSelector})`)
       .bind(now, now, now, batchLimit),
   ]);
-  const final = results[3] as { changes?: unknown; meta?: { changes?: unknown } } | undefined;
+  const final = results[2] as { changes?: unknown; meta?: { changes?: unknown } } | undefined;
   return Number(final?.meta?.changes ?? final?.changes ?? 0);
 }

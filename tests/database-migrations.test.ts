@@ -98,6 +98,57 @@ describe("database migration lifecycle", () => {
       .toThrow(/identity mutation blocked by active owner lease/);
   });
 
+  it("re-denominates legacy credits and refunds a metered settlement atomically", () => {
+    const sqlite = new DatabaseSync(":memory:");
+    sqlite.exec("PRAGMA foreign_keys = ON");
+    applyMigrations(sqlite, "0011_integrity_constraints.sql");
+    sqlite.exec(`
+      INSERT INTO users (id, name, email, created_at, updated_at)
+        VALUES ('points-user', 'Points', 'points@example.com',
+          '2026-09-01T00:00:00.000Z', '2026-09-01T00:00:00.000Z');
+      INSERT INTO ai_credit_lots
+        (id, user_id, source, reference_id, initial_credits, remaining_credits, created_at)
+        VALUES ('points-lot', 'points-user', 'signup', 'launch-signup-v1', 5, 4,
+          '2026-09-01T00:00:00.000Z');
+      INSERT INTO ai_credit_ledger
+        (id, request_id, user_id, lot_id, credits, status, model, created_at)
+        VALUES ('points-ledger', 'points-request', 'points-user', 'points-lot', 1,
+          'reserved', 'deepseek-v4-flash', '2026-09-01T00:00:00.000Z');
+      INSERT INTO credit_orders
+        (id, user_id, pack_id, credits, amount_fen, status, created_at)
+        VALUES ('points-order', 'points-user', 'light', 20, 990, 'pending',
+          '2026-09-01T00:00:00.000Z');
+      INSERT INTO model_advice_deliveries
+        (request_id, user_id, resume_id, request_fingerprint, response_json,
+          attempt_state, provider_key, credit_ledger_id, created_at, updated_at,
+          expires_at, terminal_at)
+        VALUES ('legacy-delivery', 'points-user', 'resume-1', 'fingerprint',
+          '{"creditCharged":1}', 'succeeded', 'deepseek:deepseek-v4-flash',
+          'points-ledger', '2026-09-01T00:00:00.000Z', '2026-09-01T00:01:00.000Z',
+          '2026-09-01T00:15:00.000Z', '2026-09-01T00:01:00.000Z');
+    `);
+    applyMigrationFile(sqlite, "0012_metered_jianji_points.sql");
+
+    expect(sqlite.prepare(`SELECT initial_credits, remaining_credits
+      FROM ai_credit_lots WHERE id = 'points-lot'`).get()).toEqual({
+      initial_credits: 25,
+      remaining_credits: 20,
+    });
+    expect(sqlite.prepare(`SELECT credits FROM ai_credit_ledger
+      WHERE id = 'points-ledger'`).get()).toEqual({ credits: 5 });
+    expect(sqlite.prepare(`SELECT credits FROM credit_orders
+      WHERE id = 'points-order'`).get()).toEqual({ credits: 100 });
+    expect(sqlite.prepare(`SELECT json_extract(response_json, '$.creditCharged') AS charged
+      FROM model_advice_deliveries WHERE request_id = 'legacy-delivery'`).get())
+      .toEqual({ charged: 5 });
+
+    sqlite.prepare(`UPDATE ai_credit_ledger
+      SET credits = 2, status = 'consumed', settled_at = '2026-09-01T00:02:00.000Z'
+      WHERE id = 'points-ledger'`).run();
+    expect(sqlite.prepare(`SELECT remaining_credits FROM ai_credit_lots
+      WHERE id = 'points-lot'`).get()).toEqual({ remaining_credits: 23 });
+  });
+
   it("keeps cold-start initialization within the D1 Free per-request query limit", () => {
     expect(maximumInitializationQueryCount(templates.length, targetProfiles.length)).toBe(5);
     expect(maximumInitializationQueryCount(templates.length, targetProfiles.length)).toBeLessThan(50);
@@ -126,14 +177,19 @@ describe("database migration lifecycle", () => {
   });
 });
 
-function applyMigrations(sqlite: DatabaseSync) {
+function applyMigrations(sqlite: DatabaseSync, through?: string) {
   const migrationDirectory = resolve(process.cwd(), "drizzle");
   const migrations = readdirSync(migrationDirectory)
     .filter((name) => /^\d+_.+\.sql$/.test(name))
-    .sort();
+    .sort()
+    .filter((name) => !through || name <= through);
   for (const migration of migrations) {
-    const sql = readFileSync(resolve(migrationDirectory, migration), "utf8")
-      .replaceAll("--> statement-breakpoint", "");
-    sqlite.exec(sql);
+    applyMigrationFile(sqlite, migration);
   }
+}
+
+function applyMigrationFile(sqlite: DatabaseSync, migration: string) {
+  const sql = readFileSync(resolve(process.cwd(), "drizzle", migration), "utf8")
+    .replaceAll("--> statement-breakpoint", "");
+  sqlite.exec(sql);
 }
