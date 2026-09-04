@@ -62,4 +62,26 @@ describe("standalone web resume", () => {
     expect(html).toContain('data-template-id="sterling"');
     expect(html).toContain("<h3>产品策略实习生</h3>");
   });
+
+  it("adds a script-free interactive portfolio navigation when requested", () => {
+    const resume = fixture();
+    const html = toStandaloneHtml(resume, { variant: "interactive" });
+    expect(html).toContain('data-web-variant="interactive"');
+    expect(html).toContain('class="portfolio-nav"');
+    expect(html).toContain('href="#experience"');
+    expect(html).toContain("<details class=\"mobile-nav\"");
+    expect(html).not.toContain("<script");
+    expect(html).toContain("default-src 'none'");
+    expect(html).toContain("@media (prefers-reduced-motion: reduce)");
+    expect(html).toContain("@media (max-width: 820px)");
+  });
+
+  it("derives a contrast-safe text accent independently from the decorative accent", () => {
+    const resume = fixture();
+    const template = templates.find((item) => item.id === "signal");
+    const html = toStandaloneHtml(resume, { template });
+    expect(html).toContain("--accent: #d4562c");
+    expect(html).toMatch(/--accent-text: #(?!d4562c)[0-9a-f]{6}/i);
+    expect(html).toContain("color: var(--accent-text)");
+  });
 });

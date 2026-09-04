@@ -18,10 +18,14 @@ import {
   Download,
   Eye,
   ExternalLink,
+  FileArchive,
+  FileDown,
+  FileJson,
   FileText,
   FolderKanban,
   Globe2,
   GraduationCap,
+  ImageDown,
   Languages,
   LayoutTemplate,
   Lightbulb,
@@ -38,6 +42,7 @@ import {
   ShieldCheck,
   Target,
   Trash2,
+  Upload,
   WandSparkles,
   X,
 } from "lucide-react";
@@ -45,9 +50,12 @@ import { Brand } from "@/components/brand";
 import { AccountMenu } from "@/components/account-menu";
 import { ResumePreview } from "@/components/resume-preview";
 import { TargetBrandMark } from "@/components/target-brand-mark";
+import { toGitHubPagesBundle } from "@/lib/github-pages";
 import { recommendGrowthGaps } from "@/lib/growth-data";
 import { analyzeJobFit, extractRequirements, targetBriefSourceLabels } from "@/lib/job-fit";
 import { MAX_AI_POINTS_PER_REQUEST, SIGNUP_AI_CREDITS } from "@/lib/pricing";
+import { safeFilename, toPlainText, toPortableResumeJson } from "@/lib/resume-document";
+import { toDocxBlob } from "@/lib/resume-docx";
 import {
   applyRewriteProposal,
   getTextAtSourceRef,
@@ -70,6 +78,7 @@ import type {
   TargetBriefSource,
 } from "@/types/resume";
 import styles from "./builder.module.css";
+import { ImportDialog } from "./import-dialog";
 
 type SectionId = "basics" | "summary" | "education" | "experience" | "projects" | "extras";
 type SaveState = "idle" | "saving" | "saved" | "error";
@@ -141,6 +150,7 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
   const [keptProposalIds, setKeptProposalIds] = useState<string[]>([]);
   const [mobileView, setMobileView] = useState<MobileView>("edit");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(initialExport);
   const [briefOpen, setBriefOpen] = useState(false);
   const changeSequence = useRef(0);
@@ -157,6 +167,7 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
   const adviceResultRef = useRef<HTMLHeadingElement>(null);
   const briefTriggerRef = useRef<HTMLButtonElement>(null);
   const closeExport = useCallback(() => setExportOpen(false), []);
+  const closeImport = useCallback(() => setImportOpen(false), []);
   const closeBrief = useCallback(() => setBriefOpen(false), []);
 
   const loadResume = useCallback(async () => {
@@ -629,7 +640,8 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
             </select>
             <ChevronDown size={13} />
           </label>
-          <button className="button button-primary" type="button" onClick={() => setExportOpen(true)} aria-label="导出 PDF 或网页简历"><Download size={16} /> 导出</button>
+          <button className="button button-secondary" type="button" onClick={() => setImportOpen(true)} aria-label="从文档、文字或图片导入资料"><Upload size={16} /> 导入</button>
+          <button className="button button-primary" type="button" onClick={() => setExportOpen(true)} aria-label="导出 Word、PDF、图片或网页简历"><Download size={16} /> 导出与发布</button>
           <div className={styles.builderAccount}><AccountMenu compact returnTo={`/builder/${resume.id}`} /></div>
         </div>
       </header>
@@ -872,6 +884,7 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
       <div data-print-resume className={styles.printOnly} aria-hidden="true">
         <ResumePreview content={resume.content} template={template} scale="print" />
       </div>
+      {importOpen && <ImportDialog current={resume.content} onClose={closeImport} onApply={(content) => updateContent(() => content)} />}
       {exportOpen && <ExportDialog resume={resume} template={template} onClose={closeExport} />}
       {briefOpen && (
         <TargetBriefDialog
@@ -1293,9 +1306,17 @@ function ExportDialog({
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const captureStageRef = useRef<HTMLDivElement>(null);
   const [includeContact, setIncludeContact] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
-  const webHtml = useMemo(() => toStandaloneHtml(resume, { includeContact, template }), [includeContact, resume, template]);
+  const [webVariant, setWebVariant] = useState<"static" | "interactive">("interactive");
+  const [exportAction, setExportAction] = useState<"docx" | "long-image" | "a4-image" | "github" | null>(null);
+  const [exportError, setExportError] = useState("");
+  const [exportNotice, setExportNotice] = useState("");
+  const webHtml = useMemo(
+    () => toStandaloneHtml(resume, { includeContact, template, variant: webVariant }),
+    [includeContact, resume, template, webVariant],
+  );
 
   useEffect(() => {
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -1337,6 +1358,73 @@ function ExportDialog({
     });
   }
 
+  async function runExport(
+    action: NonNullable<typeof exportAction>,
+    task: () => Promise<void>,
+  ) {
+    if (exportAction) return;
+    setExportAction(action);
+    setExportError("");
+    setExportNotice("");
+    try {
+      await task();
+    } catch (reason) {
+      setExportNotice("");
+      setExportError((reason as Error).message || "导出失败，请稍后重试");
+    } finally {
+      setExportAction(null);
+    }
+  }
+
+  async function downloadWord() {
+    await runExport("docx", async () => {
+      const blob = await toDocxBlob(resume, { includeContact: true, template });
+      downloadBlob(blob, `${safeFilename(resume.title)}.docx`);
+    });
+  }
+
+  async function downloadImage(kind: "long-image" | "a4-image") {
+    await runExport(kind, async () => {
+      const selector = kind === "long-image" ? "[data-export-long] .resume-paper" : "[data-export-a4]";
+      const node = captureStageRef.current?.querySelector<HTMLElement>(selector);
+      if (!node) throw new Error("图片画布尚未准备好，请重试");
+      const naturalWidth = Math.max(node.scrollWidth, Math.ceil(node.getBoundingClientRect().width));
+      const naturalHeight = Math.max(node.scrollHeight, Math.ceil(node.getBoundingClientRect().height));
+      const maxCanvasDimension = 15_000;
+      const maxCanvasPixels = 16_000_000;
+      const pixelRatio = kind === "a4-image"
+        ? 2
+        : Math.min(
+            2,
+            maxCanvasDimension / naturalWidth,
+            maxCanvasDimension / naturalHeight,
+            Math.sqrt(maxCanvasPixels / (naturalWidth * naturalHeight)),
+          );
+      if (pixelRatio < 0.75) {
+        throw new Error("简历内容超过单张 PNG 的可靠画布上限，请改用 PDF 或 HTML 保留全部内容");
+      }
+      if (kind === "long-image" && pixelRatio < 1.95) {
+        setExportNotice(`内容较长，已将长图像素倍率调整为 ${pixelRatio.toFixed(2)}×，确保完整内容落在浏览器可靠画布范围内。`);
+      }
+      const { toBlob } = await import("html-to-image");
+      const blob = await toBlob(node, {
+        backgroundColor: "#ffffff",
+        cacheBust: true,
+        pixelRatio,
+        skipAutoScale: true,
+      });
+      if (!blob) throw new Error("浏览器未能生成图片；可尝试使用最新版 Chrome、Safari 或 Firefox");
+      downloadBlob(blob, `${safeFilename(resume.title)}-${kind === "long-image" ? "长图" : "A4首图"}.png`);
+    });
+  }
+
+  async function downloadGitHubBundle() {
+    await runExport("github", async () => {
+      const bundle = toGitHubPagesBundle(resume, { includeContact, template, variant: webVariant });
+      downloadBlob(new Blob([bundle.slice().buffer], { type: "application/zip" }), `${safeFilename(resume.title)}-GitHub-Pages.zip`);
+    });
+  }
+
   return (
     <div className={styles.exportBackdrop} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <div ref={dialogRef} className={styles.exportDialog} role="dialog" aria-modal="true" aria-labelledby="export-title">
@@ -1345,27 +1433,62 @@ function ExportDialog({
           <button ref={closeRef} type="button" onClick={onClose} aria-label="关闭导出"><X size={20} /></button>
         </div>
         <div className={styles.exportBody}>
-          <section className={styles.pdfOutput}>
-            <div><span><Printer size={22} /></span><div><small>PDF</small><h3>打印或存为 PDF</h3></div></div>
-            <p>使用当前实时预览打开浏览器打印窗口。选择“存储为 PDF”即可保存，不会导出旧修订。</p>
-            <button className="button button-primary" type="button" onClick={printResume}><Printer size={16} /> 打印 / 存为 PDF</button>
-          </section>
+          <div className={styles.formatColumn}>
+            <section className={styles.outputCard}>
+              <div><span><Printer size={21} /></span><div><small>PDF</small><h3>打印或存为 PDF</h3></div></div>
+              <p>使用当前实时预览打开浏览器打印窗口，可保留可选中的文字。</p>
+              <button className="button button-primary" type="button" onClick={printResume}><Printer size={16} /> 打印 / 存为 PDF</button>
+            </section>
+            <section className={styles.outputCard}>
+              <div><span><FileDown size={21} /></span><div><small>WORD</small><h3>可编辑 DOCX</h3></div></div>
+              <p>生成真正的 Word 文档，适合继续修改或交给导师、顾问协作。</p>
+              <button className="button button-secondary" type="button" disabled={Boolean(exportAction)} onClick={() => void downloadWord()}>{exportAction === "docx" ? <LoaderCircle className={styles.spin} size={16} /> : <FileDown size={16} />} 下载 Word</button>
+            </section>
+            <section className={styles.outputCard}>
+              <div><span><ImageDown size={21} /></span><div><small>PNG</small><h3>图片与自然长图</h3></div></div>
+              <p>A4 首图适合快速预览；长图按内容高度生成。极长内容会在安全范围内降低倍率，超过浏览器画布上限时会提示改用 PDF。</p>
+              <div className={styles.outputSplitActions}>
+                <button type="button" disabled={Boolean(exportAction)} onClick={() => void downloadImage("a4-image")}>{exportAction === "a4-image" ? <LoaderCircle className={styles.spin} size={15} /> : <ImageDown size={15} />} A4 首图</button>
+                <button type="button" disabled={Boolean(exportAction)} onClick={() => void downloadImage("long-image")}>{exportAction === "long-image" ? <LoaderCircle className={styles.spin} size={15} /> : <ImageDown size={15} />} PNG 长图</button>
+              </div>
+            </section>
+            <section className={styles.outputCard}>
+              <div><span><FileJson size={21} /></span><div><small>DATA</small><h3>备份与 ATS 文本</h3></div></div>
+              <p>JSON 可完整恢复简历正文，但不会恢复目标、模板等元数据；TXT 适合检查机器可读性和复制到招聘系统。</p>
+              <div className={styles.outputSplitActions}>
+                <button type="button" onClick={() => downloadFile(toPortableResumeJson(resume), "application/json;charset=utf-8", `${safeFilename(resume.title)}.json`)}><FileJson size={15} /> JSON</button>
+                <button type="button" onClick={() => downloadFile(toPlainText(resume), "text/plain;charset=utf-8", `${safeFilename(resume.title)}.txt`)}><FileText size={15} /> ATS 文本</button>
+              </div>
+            </section>
+          </div>
 
           <section className={styles.webOutput}>
-            <div className={styles.webOutputHeading}><div><span><Globe2 size={22} /></span><div><small>个人网页</small><h3>生成网页简历</h3></div></div><em>单文件 HTML</em></div>
+            <div className={styles.webOutputHeading}><div><span><Globe2 size={22} /></span><div><small>个人网页</small><h3>生成网页简历</h3></div></div><em>可独立部署</em></div>
+            <div className={styles.webVariantPicker} role="group" aria-label="网页简历样式">
+              <button type="button" aria-pressed={webVariant === "interactive"} onClick={() => setWebVariant("interactive")}><strong>交互式主页</strong><span>章节导航 · 响应式</span></button>
+              <button type="button" aria-pressed={webVariant === "static"} onClick={() => setWebVariant("static")}><strong>静态简历</strong><span>纯净单栏 · 易打印</span></button>
+            </div>
             <div className={styles.webPreview}><iframe title="网页简历导出预览" srcDoc={webHtml} sandbox="" /></div>
             <div className={styles.exportPrivacy}>
               <p><AlertTriangle size={15} /> 网页可能被公开访问。默认隐藏邮箱、电话和所在地，正文中的敏感信息仍需你自行检查。</p>
               <label><input type="checkbox" checked={includeContact} onChange={(event) => setIncludeContact(event.target.checked)} /><span><Check size={12} /></span>包含邮箱、电话和所在地</label>
               <label><input type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} /><span><Check size={12} /></span>我已检查内容并理解网页可能公开</label>
             </div>
-            <button className="button button-secondary" type="button" disabled={!acknowledged} onClick={() => downloadFile(webHtml, "text/html;charset=utf-8", "index.html")}><Globe2 size={16} /> 下载网页文件</button>
-            <small className={styles.githubNote}>下载后可部署到 GitHub Pages 或其他静态托管服务；平台不会请求你的账号权限。</small>
+            <div className={styles.webActions}>
+              <button className="button button-secondary" type="button" disabled={!acknowledged} onClick={() => downloadFile(webHtml, "text/html;charset=utf-8", "index.html")}><Globe2 size={16} /> 下载 HTML</button>
+              <button className="button button-primary" type="button" disabled={!acknowledged || Boolean(exportAction)} onClick={() => void downloadGitHubBundle()}>{exportAction === "github" ? <LoaderCircle className={styles.spin} size={16} /> : <FileArchive size={16} />} GitHub Pages 发布包</button>
+            </div>
+            <small className={styles.githubNote}>发布包内含 index.html、.nojekyll 与中文步骤。当前不读取仓库，也不会把登录授权当作发布授权。</small>
           </section>
         </div>
-        <div className={styles.moreFormats}>
-          <div><strong>更多格式</strong><span>用于 ATS 检查或自行备份</span></div>
-          <button type="button" onClick={() => downloadFile(toPlainText(resume), "text/plain;charset=utf-8", `${safeFilename(resume.title)}.txt`)}><FileText size={15} /> ATS 文本</button>
+        <div className={styles.exportFooter}>
+          <div><strong>所有产物都来自当前编辑状态</strong><span>不会导出旧修订；Word、图片和发布包均在浏览器本地生成。</span></div>
+          {exportNotice && <p className={styles.exportNotice} role="status"><AlertTriangle size={14} /> {exportNotice}</p>}
+          {exportError && <p className={styles.exportError} role="alert"><AlertCircle size={14} /> {exportError}</p>}
+        </div>
+        <div ref={captureStageRef} className={styles.exportCaptureStage} aria-hidden="true">
+          <div data-export-long><ResumePreview content={resume.content} template={template} scale="print" /></div>
+          <div data-export-a4 className={styles.exportA4Frame}><ResumePreview content={resume.content} template={template} scale="print" /></div>
         </div>
       </div>
     </div>
@@ -1373,43 +1496,18 @@ function ExportDialog({
 }
 
 function downloadFile(content: string, type: string, filename: string) {
-  const url = URL.createObjectURL(new Blob([content], { type }));
+  downloadBlob(new Blob([content], { type }), filename);
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = filename;
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
-  URL.revokeObjectURL(url);
-}
-
-function safeFilename(value: string) {
-  return value.replace(/[\\/:*?"<>|]/g, "-").trim() || "简历";
-}
-
-function toPlainText(resume: ResumeRecord) {
-  const { content } = resume;
-  return [
-    content.basics.name,
-    content.basics.headline,
-    [content.basics.email, content.basics.phone, content.basics.location, content.basics.website].filter(Boolean).join(" | "),
-    "",
-    "个人简介",
-    content.summary,
-    "",
-    "教育经历",
-    ...content.education.flatMap((item) => [`${item.school} | ${item.degree} · ${item.major} | ${item.startDate} - ${item.endDate}`, item.score, ...item.highlights.map((line) => `- ${line}`)]),
-    "",
-    "工作与实践",
-    ...content.experience.flatMap((item) => [`${item.organization} | ${item.role} | ${item.startDate} - ${item.endDate}`, ...item.bullets.map((line) => `- ${line}`)]),
-    "",
-    "项目经历",
-    ...content.projects.flatMap((item) => [`${item.name} | ${item.role} | ${item.date}`, ...item.bullets.map((line) => `- ${line}`)]),
-    "",
-    `技能：${content.skills.join("、")}`,
-    `语言：${content.languages.join("、")}`,
-    `奖项：${content.awards.join("、")}`,
-  ].join("\n");
+  window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
 }
 
 function Field({ label, children, wide = false, hint }: { label: string; children: React.ReactNode; wide?: boolean; hint?: string }) {

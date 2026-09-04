@@ -7,6 +7,8 @@
 ```mermaid
 flowchart LR
   Browser[Web / Mobile Browser] --> App[Vinext App Router]
+  Browser --> LocalImport[Local TXT / Markdown / JSON / DOCX / Image Preview]
+  LocalImport --> App
   App --> Routes[Route Handlers]
   App --> Auth[Better Auth]
   Auth --> Identity[Email / OAuth / WeChat / Mainland SMS]
@@ -16,11 +18,12 @@ flowchart LR
   Domain --> Advisor[Local Advisor]
   Domain --> Evidence[JD Evidence Mapper]
   App --> Renderer[Canonical Resume Renderer]
-  Renderer --> Print[Browser PDF / ATS Text / GitHub Pages HTML]
+  Renderer --> ClientOutput[Browser PDF / DOCX / PNG / TXT / JSON / HTML / Pages ZIP]
+  Routes --> ServerExport[Saved TXT / JSON / Static HTML]
   Domain --> Growth[Growth Route Catalog]
 ```
 
-选择模块化单体而非微服务，是为了在产品验证阶段保持一条可测试、可部署的完整链路。未来上传、AI 和 PDF 导出成为长任务后，可按边界拆为 Worker，而简历领域模型和 API 契约保持稳定。
+选择模块化单体而非微服务，是为了在产品验证阶段保持一条可测试、可部署的完整链路。未来若开放云端文件处理、OCR、AI 或异步批量导出，可按边界拆为 Worker，而简历领域模型和 API 契约保持稳定。
 
 ## 2. 模块边界
 
@@ -33,7 +36,7 @@ flowchart LR
 - Rewrite Grounding：为可叙述原文生成稳定字段定位，把岗位要求、原文、草稿、理由与缺失事实绑定为同一个 proposal；应用前再次比对原文并只替换该字段。
 - Revision：每次内容更新生成不可变快照。
 - Recommendation：目标化规则检查、可选模型建议、逐次同意记录和有界用量事件。
-- Export：浏览器 A4 PDF、服务端 ATS 文本、JSON 与 GitHub Pages 单文件 HTML。
+- Import / Export：浏览器本地读取 TXT、JSON，以纯文本方式读取 Markdown / DOCX，并本地预览图片；客户端生成 PDF、DOCX、PNG、TXT、JSON、HTML 与 GitHub Pages ZIP，服务端只提供已保存修订的 TXT、JSON 和静态单文件 HTML。
 - Growth：官方课程资源目录与基于目标/现有技能证据的确定性优先级建议。
 - Admin：聚合指标、内容治理与审计边界。
 
@@ -170,15 +173,15 @@ Advisor 在平台 API 内提供两层能力：默认确定性规则分析，以�
 ## 7. 生产演进
 
 - Auth：异常登录提醒、恢复流程加固和外部提供方密钥轮换演练。
-- Files / Export：仅在 R2、队列、文件扫描、生命周期和配额绑定完整后开放上传与异步产物；当前保持关闭。
+- Files / Export：客户端有界读取 TXT、JSON，以纯文本方式读取 Markdown / DOCX，并本地校验和预览图片；用户点击合并后，仅规范 `ResumeContent` 进入现有保存 API。DOCX、PNG、HTML 和 Pages ZIP 在浏览器生成；云端原件上传、OCR 和异步产物仍未开放，需等 R2、队列、文件扫描、安全重编码、生命周期和配额完整绑定。
 - Payments：仅在真实服务商、签名回调、幂等履约、退款和日对账完整后把 `checkoutAvailable` 打开。
 - Observability：现有结构化安全事件继续接入请求 ID、集中错误监控和 OpenTelemetry。
 - Data：按 `docs/database-operations.md` 执行 Time Travel bookmark、长期加密导出与季度恢复演练，并完成区域化部署评估。
 
 ## 8. 公开网页与外部资源边界
 
-- GitHub Pages 导出是静态、无脚本、无远程依赖的单文件 HTML；所有用户内容经过 HTML 转义，链接只允许 HTTP(S)，响应和文档内同时设置 CSP。
-- 联系方式默认不进入网页文件；用户需要单独勾选并确认公开风险。
-- 当前不请求 GitHub OAuth 权限，也不代表用户创建或公开仓库。
+- GitHub Pages 导出提供静态单栏和交互式个人主页两种无脚本、无远程依赖的单文件 HTML；交互版使用章节锚点、粘性导航和移动端原生 `details`。所有用户内容经过 HTML 转义，用户填写的网站和项目链接只允许 HTTP(S)，勾选联系方式后邮箱使用 `mailto:`；下载 HTML 内含 CSP meta，服务端 HTML 响应另含 CSP header。
+- 编辑器默认隐藏邮箱、电话和所在地，包含时需勾选并确认公开风险；服务端端点也只在显式 `includeContact=true` 时包含。
+- 浏览器可生成包含 `index.html`、`.nojekyll` 和中文发布步骤的 ZIP；当前不请求 GitHub 仓库权限，也不代表用户创建或公开仓库。未来一键发布必须使用与登录分离的最小权限授权，并要求用户确认仓库、分支、目录、修订和公开范围。
 - 编辑器内的可选学习提示只指向提供方官方页面，不把未完成课程自动写入简历，也不承诺证书认可、录取或录用结果。
 - BOSS、智联等招聘平台不是产品数据依赖。系统不打开用户保存的来源链接，不调用平台 API，也不抓取页面；第一阶段只处理用户粘贴并确认的单个 JD 文字，不进入跨用户检索、训练或公共职位库。当前不上传岗位截图，用户可先在设备端识别文字并核对后粘贴。若未来引入规模化来源，只接企业官方公开 ATS API、书面授权或许可数据 feed，并保留来源、使用依据、核验日期和下线记录。

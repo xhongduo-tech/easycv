@@ -4,6 +4,7 @@ import { getTemplateDesignMeta } from "@/lib/template-system";
 export interface WebResumeOptions {
   includeContact?: boolean;
   template?: ResumeTemplate;
+  variant?: "static" | "interactive";
 }
 
 const escapeHtml = (value: unknown) => String(value ?? "")
@@ -25,17 +26,39 @@ const safeHttpUrl = (value: string) => {
   }
 };
 
+const accessibleAccentText = (value: string) => {
+  const parsed = value.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+  if (!parsed) return "#4b32c4";
+  let channels = parsed.slice(1).map((channel) => Number.parseInt(channel, 16));
+  const paper = [255, 254, 251];
+  while (contrastRatio(channels, paper) < 4.5) {
+    channels = channels.map((channel) => Math.max(0, Math.floor(channel * 0.88)));
+  }
+  return `#${channels.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
+};
+
+const contrastRatio = (left: number[], right: number[]) => {
+  const luminance = (channels: number[]) => channels
+    .map((channel) => channel / 255)
+    .map((channel) => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4)
+    .reduce((total, channel, index) => total + channel * [0.2126, 0.7152, 0.0722][index], 0);
+  const first = luminance(left);
+  const second = luminance(right);
+  return (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05);
+};
+
 const list = (items: string[]) => items.length
   ? `<ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`
   : "";
 
-const section = (title: string, body: string) => body
-  ? `<section><h2>${escapeHtml(title)}</h2>${body}</section>`
+const section = (id: string, title: string, body: string) => body
+  ? `<section id="${id}"><h2>${escapeHtml(title)}</h2>${body}</section>`
   : "";
 
 export function toStandaloneHtml(resume: ResumeRecord, options: WebResumeOptions = {}) {
   const content = resume.content;
   const accent = /^#[0-9a-f]{6}$/i.test(options.template?.accent ?? "") ? options.template!.accent : "#5c3ee8";
+  const accentText = accessibleAccentText(accent);
   const design = getTemplateDesignMeta(options.template?.id ?? resume.templateId);
   const layout = options.template?.layout && ["classic", "modern", "compact", "editorial"].includes(options.template.layout)
     ? options.template.layout
@@ -44,6 +67,7 @@ export function toStandaloneHtml(resume: ResumeRecord, options: WebResumeOptions
     ? options.template?.id ?? resume.templateId
     : "custom";
   const includeContact = options.includeContact === true;
+  const interactive = options.variant === "interactive";
   const websiteUrl = safeHttpUrl(content.basics.website);
   const contact = [
     includeContact && content.basics.email ? `<a href="mailto:${escapeHtml(content.basics.email)}">${escapeHtml(content.basics.email)}</a>` : "",
@@ -79,6 +103,26 @@ export function toStandaloneHtml(resume: ResumeRecord, options: WebResumeOptions
     content.languages.length ? `<div><h3>语言</h3><p>${escapeHtml(content.languages.join(" · "))}</p></div>` : "",
     content.awards.length ? `<div><h3>奖项与证书</h3><p>${escapeHtml(content.awards.join(" · "))}</p></div>` : "",
   ].filter(Boolean).join("");
+  const navigation = [
+    content.summary ? ["profile", "个人简介"] : null,
+    content.education.length ? ["education", "教育经历"] : null,
+    content.experience.length ? ["experience", "工作与实践"] : null,
+    content.projects.length ? ["projects", "项目经历"] : null,
+    extras ? ["extras", "技能与其他"] : null,
+  ].filter((item): item is string[] => Boolean(item));
+  const navigationLinks = navigation
+    .map(([id, label], index) => `<a href="#${id}"><span>${String(index + 1).padStart(2, "0")}</span>${escapeHtml(label)}</a>`)
+    .join("");
+  const portfolioStart = interactive ? `<div class="portfolio-shell">
+    <aside class="portfolio-nav" aria-label="简历章节">
+      <a class="mini-brand" href="#top">${escapeHtml(content.basics.name || resume.title)}</a>
+      <nav>${navigationLinks}</nav>
+      <p>独立网页简历<br>可部署至 GitHub Pages</p>
+    </aside>` : "";
+  const portfolioEnd = interactive ? "</div>" : "";
+  const mobileNavigation = interactive && navigationLinks
+    ? `<details class="mobile-nav"><summary>浏览简历章节</summary><nav>${navigationLinks}</nav></details>`
+    : "";
 
   return `<!doctype html>
 <html lang="zh-CN">
@@ -90,7 +134,7 @@ export function toStandaloneHtml(resume: ResumeRecord, options: WebResumeOptions
   <meta name="description" content="${escapeHtml(content.basics.headline || resume.targetName)}">
   <title>${escapeHtml(content.basics.name || resume.title)} · Resume</title>
   <style>
-    :root { --accent: ${accent}; --ink: #171822; --muted: #626574; --line: #dfddd7; --paper: #fffefb; }
+    :root { --accent: ${accent}; --accent-text: ${accentText}; --ink: #171822; --muted: #626574; --line: #dfddd7; --paper: #fffefb; }
     * { box-sizing: border-box; }
     html { scroll-behavior: smooth; }
     body { margin: 0; color: var(--ink); background: #f2f0eb; font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif; line-height: 1.55; }
@@ -100,9 +144,9 @@ export function toStandaloneHtml(resume: ResumeRecord, options: WebResumeOptions
     header > p { max-width: 690px; margin: 16px 0 0; color: var(--muted); font-size: 1.05rem; }
     .contact { display: flex; flex-wrap: wrap; gap: 7px 11px; margin-top: 19px; font-size: .82rem; }
     .contact i { color: #aaa; font-style: normal; }
-    a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 3px; overflow-wrap: anywhere; }
+    a { color: var(--accent-text); text-decoration-thickness: 1px; text-underline-offset: 3px; overflow-wrap: anywhere; }
     section { display: grid; grid-template-columns: 145px minmax(0, 1fr); gap: 26px; padding: 30px 0; border-bottom: 1px solid var(--line); }
-    section > h2 { margin: 0; color: var(--accent); font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; }
+    section > h2 { margin: 0; color: var(--accent-text); font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; }
     section > p { margin: 0; color: #343643; }
     .entry + .entry { margin-top: 25px; }
     .entry-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
@@ -114,6 +158,17 @@ export function toStandaloneHtml(resume: ResumeRecord, options: WebResumeOptions
     li { padding-left: 3px; margin-top: 5px; font-size: .82rem; }
     .extras { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
     footer { padding-top: 24px; color: var(--muted); font-size: .65rem; text-align: center; }
+    section[id] { scroll-margin-top: 24px; }
+    .portfolio-shell { display: grid; width: min(1180px, calc(100% - 40px)); grid-template-columns: 220px minmax(0, 900px); align-items: start; gap: 26px; margin: 30px auto 70px; }
+    .portfolio-shell main { width: 100%; margin: 0; }
+    .portfolio-nav { position: sticky; top: 30px; display: grid; gap: 28px; padding: 22px; border: 1px solid #d8d5ce; border-radius: 18px; background: rgba(255,254,251,.92); box-shadow: 0 14px 42px rgba(24,24,32,.08); backdrop-filter: blur(12px); }
+    .mini-brand { color: var(--ink); font-size: .78rem; font-weight: 800; text-decoration: none; }
+    .portfolio-nav nav, .mobile-nav nav { display: grid; gap: 4px; }
+    .portfolio-nav nav a, .mobile-nav nav a { display: grid; min-height: 40px; grid-template-columns: 27px 1fr; align-items: center; gap: 8px; padding: 0 9px; border-radius: 9px; color: var(--muted); font-size: .72rem; text-decoration: none; transition: color .18s ease, background .18s ease, transform .18s ease; }
+    .portfolio-nav nav a:hover, .portfolio-nav nav a:focus-visible, .mobile-nav nav a:hover { color: var(--accent-text); background: color-mix(in srgb, var(--accent) 8%, white); transform: translateX(2px); }
+    .portfolio-nav nav span, .mobile-nav nav span { color: var(--accent-text); font-size: .58rem; font-weight: 800; }
+    .portfolio-nav > p { margin: 0; color: var(--muted); font-size: .58rem; line-height: 1.6; }
+    .mobile-nav { display: none; }
     main.family-academic, main.family-research, main.family-editorial { font-family: Georgia, "Times New Roman", "Songti SC", serif; }
     main.family-academic { border-top-width: 2px; }
     main.family-academic h1 { font-weight: 600; letter-spacing: -.035em; }
@@ -142,33 +197,49 @@ export function toStandaloneHtml(resume: ResumeRecord, options: WebResumeOptions
     main.template-sterling section { border-bottom-color: #cbd1d8; }
     main.template-orbit { border-top-width: 5px; }
     main.template-statecraft section > h2 { letter-spacing: .16em; }
+    @media (max-width: 820px) {
+      .portfolio-shell { display: block; width: 100%; margin: 0; }
+      .portfolio-nav { display: none; }
+      .mobile-nav { display: block; padding: 12px 18px; border-bottom: 1px solid var(--line); background: var(--paper); }
+      .mobile-nav summary { cursor: pointer; color: var(--accent-text); font-size: .72rem; font-weight: 750; }
+      .mobile-nav nav { padding-top: 9px; }
+    }
     @media (max-width: 640px) {
       main { width: 100%; padding: 30px 22px; margin: 0; box-shadow: none; }
       section { grid-template-columns: 1fr; gap: 13px; }
       .entry-head { flex-direction: column; gap: 5px; }
       .extras { grid-template-columns: 1fr; }
     }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      .portfolio-nav nav a, .mobile-nav nav a { transition: none; }
+    }
     @media print {
       body { background: white; }
       main { width: 100%; padding: 0; margin: 0; box-shadow: none; }
       a { color: inherit; text-decoration: none; }
+      .portfolio-shell { display: block; width: 100%; margin: 0; }
+      .portfolio-nav, .mobile-nav { display: none; }
     }
   </style>
 </head>
-<body>
-  <main class="family-${design.family} layout-${layout} density-${design.density} template-${templateId}" data-template-family="${design.family}" data-template-id="${templateId}">
+<body class="${interactive ? "interactive-site" : "static-site"}">
+  ${mobileNavigation}
+  ${portfolioStart}
+  <main id="top" class="family-${design.family} layout-${layout} density-${design.density} template-${templateId}" data-template-family="${design.family}" data-template-id="${templateId}" data-web-variant="${interactive ? "interactive" : "static"}">
     <header>
       <h1>${escapeHtml(content.basics.name || "你的姓名")}</h1>
       ${content.basics.headline ? `<p>${escapeHtml(content.basics.headline)}</p>` : ""}
       ${contact ? `<div class="contact">${contact}</div>` : ""}
     </header>
-    ${section("个人简介", content.summary ? `<p>${escapeHtml(content.summary)}</p>` : "")}
-    ${section("教育经历", education)}
-    ${section("工作与实践", experience)}
-    ${section("项目经历", projects)}
-    ${section("技能与其他", extras ? `<div class="extras">${extras}</div>` : "")}
+    ${section("profile", "个人简介", content.summary ? `<p>${escapeHtml(content.summary)}</p>` : "")}
+    ${section("education", "教育经历", education)}
+    ${section("experience", "工作与实践", experience)}
+    ${section("projects", "项目经历", projects)}
+    ${section("extras", "技能与其他", extras ? `<div class="extras">${extras}</div>` : "")}
     <footer>由简迹 CV 导出 · 请以本人核验后的内容为准</footer>
   </main>
+  ${portfolioEnd}
 </body>
 </html>`;
 }

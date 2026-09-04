@@ -84,7 +84,7 @@
 
 依据拥有独立修订号；首次创建使用 `expectedRevision: 0`。用户确认的 `requirementsText` 是唯一分析输入，来源链接只允许 HTTP(S)，仅用于用户核对，服务端不会打开链接、调用招聘平台 API 或抓取内容。岗位描述上限为 12,000 字符且不超过 30 KB。`sourceType` 当前写入 `employer-official`、`other-platform` 或 `manual`；接口继续接受 `boss`、`zhaopin` 仅用于兼容已有记录。
 
-当前版本不接收岗位截图。用户可在设备端完成文字识别后，将结果粘贴并核对；这样岗位分析仍有一份可修改、可确认的规范文本输入。
+当前 target-brief API 不接收岗位截图，多源工作台的图片流程也不能写入 `requirementsText`；它只在本地预览 JPEG、PNG、WebP，并允许把用户手工核对的文字加入个人简介、技能或奖项。岗位截图仍需先在设备端识别并核对文字，再粘贴到岗位描述；原图不会发往服务端。
 
 求职编辑器在本地根据已保存 JD 生成可解释证据地图，不返回录用率或胜任力分数。系统按原文顺序优先提取最多 12 项职责或能力要求；每条证据逐字引用简历正文，没有证据时只提示补充真实事实。
 
@@ -139,7 +139,9 @@
 - `GET /api/resumes/:id/export?format=github-pages&includeContact=false`
 - `POST /api/account/export`（完整账号数据包；要求近期登录与当前会话 MFA）
 
-PDF 使用编辑器中的打印入口生成可选中文本的 A4 文档。`github-pages` 返回可直接上传的 `index.html`；默认隐藏邮箱、电话和所在地，正文经过 HTML 转义且链接仅允许 HTTP(S)。
+PDF 使用编辑器中的打印入口生成可选中文本的 A4 文档。`GET ...?format=github-pages` 返回已保存修订的静态单栏 `index.html`，不返回交互版或 ZIP；默认隐藏邮箱、电话和所在地。用户填写的网站和项目链接只允许 HTTP(S)，包含邮箱时使用 `mailto:`。
+
+可编辑 DOCX、A4 首图、PNG 长图、静态/交互 HTML 和 GitHub Pages ZIP 按编辑器当前内存状态在浏览器本地生成，可包含尚待自动保存的修改；上述 GET 端点读取已保存修订。客户端与服务端 TXT / JSON 共用正文序列化逻辑，但单份简历 JSON 回导只消费 `content`，服务端简历 JSON 也不包含独立存储的 `targetBrief`。当前没有二进制上传 API；ZIP 由用户手动上传，平台不读取仓库或执行发布。
 
 ## 编辑器内学习提示
 
