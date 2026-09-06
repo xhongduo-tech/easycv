@@ -8,11 +8,6 @@ export function SiteHeader({ minimal = false }: { minimal?: boolean }) {
     <header className="site-header">
       <div className="shell header-inner">
         <Brand />
-        {!minimal && (
-          <nav className="desktop-nav" aria-label="主要导航">
-            <Link href="/pricing">定价</Link>
-          </nav>
-        )}
         <div className="header-actions">
           <Link className="button button-primary" href="/dashboard?new=1">
             创建简历
@@ -22,6 +17,11 @@ export function SiteHeader({ minimal = false }: { minimal?: boolean }) {
             <FileText size={17} aria-hidden="true" />
             我的简历
           </Link>
+          {!minimal && (
+            <nav className="desktop-nav" aria-label="主要导航">
+              <Link href="/pricing">定价</Link>
+            </nav>
+          )}
           {!minimal && <AccountMenu />}
         </div>
       </div>
