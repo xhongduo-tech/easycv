@@ -6,7 +6,7 @@ export function HomepageStory() {
     <figure className={styles.story} aria-label="简历表达与材料来源示例">
       <div className={styles.storyCaption}>
         <span>一段经历，更清晰的表达</span>
-        <span>示例 · 01</span>
+        <span>简历节选</span>
       </div>
 
       <div className={styles.paperStack}>
@@ -16,16 +16,15 @@ export function HomepageStory() {
               <h2>林予安</h2>
               <p>产品经理 · 用户研究与产品体验</p>
             </div>
-            <span className={styles.paperMonogram} aria-hidden="true">LY</span>
           </header>
 
           <section className={styles.resumeSection}>
-            <h3>个人简介 <span>PROFILE</span></h3>
-            <p>关注用户的真实需要，以访谈和反馈推动产品迭代。在产品、设计与研发的协作中，把问题转化为清晰的行动。</p>
+            <h3>个人简介</h3>
+            <p>通过用户访谈与反馈整理需求，协同设计、研发推动产品迭代。</p>
           </section>
 
           <section className={styles.resumeSection}>
-            <h3>项目经历 <span>EXPERIENCE</span></h3>
+            <h3>项目经历</h3>
             <div className={styles.experienceHeading}>
               <strong>新用户引导体验优化</strong>
               <span>2025</span>

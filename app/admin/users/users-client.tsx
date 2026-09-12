@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- OAuth avatar hosts are user/provider controlled and are not proxied by this Vinext app. */
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore, type FormEvent } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -38,8 +38,12 @@ type ManagedUser = {
 };
 
 const pageSize = 25;
+const subscribeToHydration = () => () => {};
+const clientSnapshot = () => true;
+const serverSnapshot = () => false;
 
 export function AdminUsersClient() {
+  const hydrated = useSyncExternalStore(subscribeToHydration, clientSnapshot, serverSnapshot);
   const viewer = authClient.useSession();
   const viewerRole = (viewer.data?.user as (NonNullable<typeof viewer.data>["user"] & { role?: string }) | undefined)?.role;
   const [users, setUsers] = useState<ManagedUser[]>([]);
@@ -100,14 +104,14 @@ export function AdminUsersClient() {
     void load();
   }
 
-  if (viewer.isPending) return <AdminState loading />;
+  if (!hydrated || viewer.isPending) return <AdminState loading />;
   if (!viewer.data?.user || viewerRole !== "admin") return <AdminState />;
   const currentUserId = viewer.data.user.id;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
     <main className={styles.page}>
-      <SiteHeader />
+      <SiteHeader variant="workspace" title="用户管理" />
       <section className={styles.adminShell}>
         <div className="shell">
           <div className={styles.adminHeader}>
@@ -142,13 +146,13 @@ export function AdminUsersClient() {
           <div className={styles.pagination}><button type="button" disabled={page === 0 || loading} onClick={() => setPage((value) => Math.max(0, value - 1))}><ChevronLeft size={15} /> 上一页</button><span>第 {page + 1} / {totalPages} 页</span><button type="button" disabled={page + 1 >= totalPages || loading} onClick={() => setPage((value) => value + 1)}>下一页 <ChevronRight size={15} /></button></div>
         </div>
       </section>
-      <SiteFooter />
+      <SiteFooter variant="workspace" />
     </main>
   );
 }
 
 function AdminState({ loading = false }: { loading?: boolean }) {
-  return <main className={styles.page}><SiteHeader /><section className={styles.adminState}>{loading ? <LoaderCircle className={styles.spin} size={28} /> : <ShieldOff size={34} />}<h1>{loading ? "正在验证管理权限" : "无权访问"}</h1>{!loading && <><p>请使用管理员账号登录后再访问用户管理。</p><Link className="button button-primary" href="/auth/login?returnTo=%2Fadmin%2Fusers">管理员登录</Link></>}</section></main>;
+  return <main className={styles.page}><SiteHeader variant="workspace" title="用户管理" /><section className={styles.adminState}>{loading ? <LoaderCircle className={styles.spin} size={28} /> : <ShieldOff size={34} />}<h1>{loading ? "正在验证管理权限" : "无权访问"}</h1>{!loading && <><p>请使用管理员账号登录后再访问用户管理。</p><Link className="button button-primary" href="/auth/login?returnTo=%2Fadmin%2Fusers">管理员登录</Link></>}</section></main>;
 }
 
 function displayEmail(email: string) { return email.endsWith(".invalid") ? "受保护的第三方标识" : email; }

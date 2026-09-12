@@ -32,8 +32,8 @@ export function HomepageTemplates() {
       <div className="shell">
         <div className={styles.heading}>
           <div>
-            <p className={styles.eyebrow}>落在纸上，也要恰到好处</p>
-            <h2 id="templates-title">好内容，<span>值得一份好版式。</span></h2>
+            <p className={styles.eyebrow}>简历版式</p>
+            <h2 id="templates-title">选择适合内容的版式。</h2>
           </div>
           <p className={styles.intro}>
             清楚、舒展，或是更紧凑。<br />
@@ -42,7 +42,7 @@ export function HomepageTemplates() {
         </div>
 
         <HomepageTemplateGallery labels={featuredTemplates.map((featured) => featured.label)}>
-          {featuredTemplates.map((featured, index) => {
+          {featuredTemplates.map((featured) => {
             const template = templates.find((item) => item.id === featured.id);
             if (!template) return null;
 
@@ -60,7 +60,6 @@ export function HomepageTemplates() {
                 </div>
                 <figcaption className={styles.caption}>
                   <div className={styles.captionTitle}>
-                    <span className={styles.number}>0{index + 1}</span>
                     <h3>{featured.label}</h3>
                     <span className={styles.templateName}>{template.name.split(" ")[0]}</span>
                   </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -42,7 +42,12 @@ type BillingState = {
   checkoutAvailable: boolean;
 };
 
+const subscribeToHydration = () => () => {};
+const clientSnapshot = () => true;
+const serverSnapshot = () => false;
+
 export function AccountClient() {
+  const hydrated = useSyncExternalStore(subscribeToHydration, clientSnapshot, serverSnapshot);
   const router = useRouter();
   const viewer = authClient.useSession();
   const user = viewer.data?.user as (NonNullable<typeof viewer.data>["user"] & {
@@ -226,22 +231,22 @@ export function AccountClient() {
     setMessage({ tone: "error", text: authErrorMessage(error.code, error.message) });
   }
 
-  if (viewer.isPending) return <AccountState loading />;
+  if (!hydrated || viewer.isPending) return <AccountState loading />;
   if (!user) return <AccountState />;
   const currentToken = viewer.data?.session.token;
 
   return (
     <main className={styles.page}>
-      <SiteHeader />
+      <SiteHeader variant="workspace" title="账号与安全" />
       <section className={styles.accountShell}>
         <div className="shell">
-          <header className={styles.heading}><div><p className="eyebrow">账号中心</p><h1>账号与安全</h1><p>管理个人资料、登录方式和已登录设备。</p></div><span><ShieldCheck size={18} /> 安全状态正常</span></header>
+          <header className={styles.heading}><div><h1>账号与安全</h1><p>管理个人资料、登录方式和已登录设备。</p></div><span><ShieldCheck size={18} /> 安全状态正常</span></header>
           {message && <div className={styles.message} data-tone={message.tone} role={message.tone === "error" ? "alert" : "status"}>{message.text}</div>}
           <nav className={styles.anchorNav} aria-label="账号设置"><a href="#credits">简迹点</a><a href="#profile">个人资料</a><a href="#connections">登录方式</a><a href="#security">密码与邮箱</a><a href="#two-factor">双重验证</a><a href="#sessions">设备会话</a><a href="#data">我的数据</a><a href="#danger">删除账号</a></nav>
 
           <div className={styles.settingsGrid}>
             <section id="credits" className={`${styles.panel} ${styles.widePanel} ${styles.creditPanel}`}>
-              <PanelTitle icon={Coins} title="DeepSeek 增强优化简迹点" text="基础编辑、模板、检查与导出始终免费；成功的增强优化按实际 Token 用量扣点。" />
+              <PanelTitle icon={Coins} title="简迹点" text="增强优化按实际用量结算，基础编辑、模板与导出免费。" />
               {billingStatus === "ready" && billing ? <div className={styles.creditLayout}>
                 <div className={styles.balanceCard}>
                   <span>当前可用</span>
@@ -290,12 +295,12 @@ export function AccountClient() {
           </div>
         </div>
       </section>
-      <SiteFooter />
+      <SiteFooter variant="workspace" />
     </main>
   );
 }
 
-function AccountState({ loading = false }: { loading?: boolean }) { return <main className={styles.page}><SiteHeader /><section className={styles.state}>{loading ? <><LoaderCircle className={styles.spin} size={28} /><h1>正在读取账号</h1></> : <><ShieldCheck size={32} /><h1>请先登录</h1><p>登录后即可管理账号与安全设置。</p><Link className="button button-primary" href="/auth/login?returnTo=%2Faccount">登录账号</Link></>}</section></main>; }
+function AccountState({ loading = false }: { loading?: boolean }) { return <main className={styles.page}><SiteHeader variant="workspace" title="账号与安全" /><section className={styles.state}>{loading ? <><LoaderCircle className={styles.spin} size={28} /><h1>正在读取账号</h1></> : <><ShieldCheck size={32} /><h1>请先登录</h1><p>登录后即可管理账号与安全设置。</p><Link className="button button-primary" href="/auth/login?returnTo=%2Faccount">登录账号</Link></>}</section></main>; }
 function PanelTitle({ icon: Icon, title, text }: { icon: typeof UserRound; title: string; text: string }) { return <header className={styles.panelTitle}><span><Icon size={19} /></span><div><h2>{title}</h2><p>{text}</p></div></header>; }
 function Field({ label, hint, value, onChange, ...props }: { label: string; hint?: string; value: string; onChange: (value: string) => void } & Omit<React.InputHTMLAttributes<HTMLInputElement>, "value" | "onChange">) { return <label className={styles.field}><span>{label}</span><input {...props} value={value} onChange={(event) => onChange(event.target.value)} />{hint && <small>{hint}</small>}</label>; }
 function providerLabel(provider: string) { return provider === "google" ? "Google" : provider === "github" ? "GitHub" : provider === "wechat" ? "微信扫码" : provider === "credential" ? "邮箱密码" : provider; }

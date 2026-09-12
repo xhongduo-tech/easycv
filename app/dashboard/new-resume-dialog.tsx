@@ -33,6 +33,10 @@ export function NewResumeDialog({
   const router = useRouter();
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const purposeRef = useRef<HTMLButtonElement>(null);
+  const targetSearchRef = useRef<HTMLInputElement>(null);
+  const focusFieldRef = useRef<HTMLInputElement>(null);
+  const selectedTargetRef = useRef<HTMLDivElement>(null);
   const creatingRef = useRef(false);
   const [track, setTrack] = useState<Track | "">(initialTrack ?? "");
   const [targets, setTargets] = useState<TargetProfile[]>([]);
@@ -47,6 +51,7 @@ export function NewResumeDialog({
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [targetPickerOpen, setTargetPickerOpen] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -57,13 +62,25 @@ export function NewResumeDialog({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !creatingRef.current) onClose();
       if (event.key !== "Tab" || !dialogRef.current) return;
+      if (creatingRef.current) {
+        event.preventDefault();
+        dialogRef.current.focus({ preventScroll: true });
+        return;
+      }
       const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(
         'button:not([disabled]), input:not([disabled]), select:not([disabled]), [href]'
-      ));
-      if (!focusable.length) return;
+      )).filter((element) => element.getClientRects().length > 0 && !element.closest('[aria-hidden="true"]'));
+      if (!focusable.length) {
+        event.preventDefault();
+        dialogRef.current.focus({ preventScroll: true });
+        return;
+      }
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
+      if (document.activeElement === dialogRef.current || !dialogRef.current.contains(document.activeElement)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      } else if (event.shiftKey && document.activeElement === first) {
         event.preventDefault();
         last.focus();
       } else if (!event.shiftKey && document.activeElement === last) {
@@ -149,8 +166,16 @@ export function NewResumeDialog({
   const effectiveTemplateId = templateTouched && templates.some((item) => item.id === selectedTemplate)
     ? selectedTemplate
     : recommendedTemplates[0]?.id ?? templates[0]?.id ?? "";
+  const hasTarget = Boolean(target || customTarget.trim());
+  const needsFocus = track === "career" && !focusName.trim();
+  const nextAction = !track ? "选择简历用途" : !hasTarget ? "选择目标" : needsFocus ? "填写岗位或方向" : "创建并开始填写";
+  const nextHint = !track ? "先选择用途，随后选择目标。"
+    : !hasTarget ? "请选择一个目标，也可以直接填写自己的目标。"
+      : needsFocus ? "还需填写岗位或方向，例如「产品经理」。"
+        : "已准备好。创建后进入编辑器，开始填写空白草稿。";
 
   function changeTrack(nextTrack: Track) {
+    if (nextTrack === track) return;
     setTrack(nextTrack);
     setTargets([]);
     setGroups([]);
@@ -163,6 +188,17 @@ export function NewResumeDialog({
     setTemplateTouched(false);
     setQuery("");
     setError("");
+    setTargetPickerOpen(true);
+  }
+
+  function advance() {
+    if (!track) return purposeRef.current?.focus();
+    if (!hasTarget) return targetSearchRef.current?.focus();
+    if (needsFocus) {
+      setTargetPickerOpen(false);
+      return focusFieldRef.current?.focus();
+    }
+    void createResume();
   }
 
   async function createResume() {
@@ -173,6 +209,7 @@ export function NewResumeDialog({
     if (!templateId) return setError("暂时无法匹配版式，请稍后重试");
 
     creatingRef.current = true;
+    dialogRef.current?.focus({ preventScroll: true });
     setCreating(true);
     setError("");
     try {
@@ -202,17 +239,17 @@ export function NewResumeDialog({
 
   return (
     <div className={styles.dialogBackdrop} onMouseDown={(event) => { if (!creatingRef.current && event.target === event.currentTarget) onClose(); }}>
-      <div ref={dialogRef} className={styles.newResumeDialog} role="dialog" aria-modal="true" aria-labelledby="new-resume-title" aria-busy={creating}>
+      <div ref={dialogRef} className={styles.newResumeDialog} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="new-resume-title" aria-busy={creating}>
         <div className={styles.dialogHeader}>
-          <div><span><FilePlus2 size={21} /></span><div><small>NEW DOCUMENT / 新建简历</small><h2 id="new-resume-title">为下一次机会，建立一个版本。</h2></div></div>
+          <div><span><FilePlus2 size={21} /></span><div><h2 id="new-resume-title">新建简历</h2><p>先确定用途和目标，版式可以随时更换。</p></div></div>
           <button ref={closeRef} type="button" disabled={creating} onClick={onClose} aria-label="关闭新建简历"><X size={20} /></button>
         </div>
 
         <div className={styles.dialogBody}>
           <section className={styles.createSection}>
-            <div className={styles.createSectionTitle}><span>01</span><div><h3>这次，用来做什么？</h3><p>从材料用途开始。无论你处在什么阶段，都可以在这里准备。</p></div></div>
+            <div className={styles.createSectionTitle}><span>1</span><div><h3>选择用途</h3><p>决定材料的内容结构和推荐版式。</p></div></div>
             <div className={styles.purposeChoices}>
-              <button type="button" disabled={creating} aria-pressed={track === "study"} className={track === "study" ? styles.purposeActive : ""} onClick={() => changeTrack("study")}>
+              <button ref={purposeRef} type="button" disabled={creating} aria-pressed={track === "study"} className={track === "study" ? styles.purposeActive : ""} onClick={() => changeTrack("study")}>
                 <GraduationCap size={21} /><div><strong>学习与研究</strong><small>院校 · 研究项目 · 学位</small></div>{track === "study" && <Check size={17} />}
               </button>
               <button type="button" disabled={creating} aria-pressed={track === "career"} className={track === "career" ? styles.purposeActive : ""} onClick={() => changeTrack("career")}>
@@ -223,16 +260,21 @@ export function NewResumeDialog({
 
           {track && (
             <section className={styles.createSection}>
-              <div className={styles.createSectionTitle}><span>02</span><div><h3>准备交给谁？</h3><p>选择目标，或直接填写你的{track === "study" ? "院校、机构或研究项目" : "企业、客户或合作项目"}。</p></div></div>
+              <div className={styles.createSectionTitle}><span>2</span><div><h3>选择目标</h3><p>选择或填写{track === "study" ? "院校、机构或研究项目" : "企业、客户或合作项目"}。</p></div></div>
+              {hasTarget && !targetPickerOpen ? (
+                <div ref={selectedTargetRef} className={styles.selectedTarget} tabIndex={-1}><div><span>已选目标</span><strong>{target?.name ?? customTarget.trim()}</strong></div><button type="button" disabled={creating} onClick={() => { setTargetPickerOpen(true); requestAnimationFrame(() => targetSearchRef.current?.focus()); }}>更换目标</button></div>
+              ) : <>
               <div className={styles.groupChips} role="group" aria-label={track === "study" ? "院校地区" : "企业类型"}>
-                {groups.map((group) => <button type="button" disabled={creating} key={group.key} aria-pressed={!query && selectedGroup === group.key} className={!query && selectedGroup === group.key ? styles.groupActive : ""} onClick={() => { setSelectedGroup(group.key); setQuery(""); setSelectedTarget(""); setCustomTarget(""); }}>{group.label}<small>{group.count}</small></button>)}
+                {groups.map((group) => <button type="button" disabled={creating} key={group.key} aria-pressed={!query && selectedGroup === group.key} className={!query && selectedGroup === group.key ? styles.groupActive : ""} onClick={() => { setSelectedGroup(group.key); setQuery(""); }}>{group.label}<small>{group.count}</small></button>)}
               </div>
-              <label className={styles.targetSearch}><Search size={17} /><span className="sr-only">搜索目标</span><input disabled={creating} value={query} onChange={(event) => { setQuery(event.target.value); setSelectedTarget(""); }} placeholder={`搜索${track === "study" ? "院校或地区" : "企业或行业"}`} /></label>
+              <label className={styles.targetSearch}><Search size={17} /><span className="sr-only">搜索目标</span><input ref={targetSearchRef} disabled={creating} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`搜索${track === "study" ? "院校或地区" : "企业或行业"}`} /></label>
               {loading ? <div className={styles.targetLoading}><LoaderCircle size={19} /> 正在加载目标…</div> : (
                 <div className={styles.targetOptions}>
                   {visibleTargets.length === 0 && <p className={styles.noTargets}>没有找到匹配目标。可以在下方直接填写。</p>}
                   {visibleTargets.map((item) => <button type="button" disabled={creating} key={item.id} aria-pressed={selectedTarget === item.id} className={selectedTarget === item.id ? styles.targetActive : ""} onClick={() => {
                     setSelectedTarget(item.id);
+                    setTargetPickerOpen(false);
+                    requestAnimationFrame(() => (track === "career" ? focusFieldRef.current : selectedTargetRef.current)?.focus());
                     setCustomTarget("");
                     const nextId = recommendedTemplateIdsFor(item, focusName).find((id) => templates.some((template) => template.id === id));
                     setSelectedTemplate(nextId ?? templates[0]?.id ?? "");
@@ -247,8 +289,9 @@ export function NewResumeDialog({
                   <span>企业名称及标识仅用于目标识别，不表示合作或背书。</span>
                 </p>
               )}
-              <label className={styles.customTarget}><span>没有找到？</span><input disabled={creating} value={customTarget} onChange={(event) => {
+              <label className={styles.customTarget}><span>自定义目标</span><input disabled={creating} value={customTarget} onChange={(event) => {
                 setCustomTarget(event.target.value);
+                setError("");
                 if (event.target.value) {
                   setSelectedTarget("");
                   if (!templateTouched) {
@@ -257,18 +300,21 @@ export function NewResumeDialog({
                   }
                 }
               }} maxLength={240} placeholder={`输入自定义${track === "study" ? "院校、机构或项目" : "企业、客户或合作项目"}`} /></label>
+              </>}
             </section>
           )}
 
           {track === "career" && (target || customTarget.trim()) && (
             <section className={styles.createSection}>
-              <div className={styles.createSectionTitle}><span>03</span><div><h3>你的目标方向</h3><p>让表达有重点。具体要求可以进入编辑器后再补充。</p></div></div>
+              <div className={styles.createSectionTitle}><span>3</span><div><h3>填写岗位或方向</h3><p>用于命名简历并推荐版式。具体要求可以稍后补充。</p></div></div>
               <label className={styles.focusField}>
-                <span>岗位或方向</span>
+                <span>岗位或方向（必填）</span>
                 <input
+                  ref={focusFieldRef}
+                  required
                   value={focusName}
                   disabled={creating}
-                  onChange={(event) => setFocusName(event.target.value)}
+                  onChange={(event) => { setFocusName(event.target.value); setError(""); }}
                   placeholder="例如：产品经理、研发负责人、独立设计合作"
                   maxLength={160}
                 />
@@ -278,7 +324,7 @@ export function NewResumeDialog({
 
           {track && (target || customTarget.trim()) && (
             <section className={styles.createSection}>
-              <div className={styles.createSectionTitle}><span>{track === "career" ? "04" : "03"}</span><div><h3>选择一张好纸</h3><p>按阅读场景推荐的专业版式，之后仍可更换。非目标单位官方模板。</p></div></div>
+              <div className={styles.createSectionTitle}><span>{track === "career" ? "4" : "3"}</span><div><h3>确认版式</h3><p>已选好一套推荐版式，也可以自行更换。非目标单位官方模板。</p></div></div>
               <div className={styles.templateRecommendations}>
                 {recommendedTemplates.map((item, index) => (
                   <article
@@ -312,9 +358,9 @@ export function NewResumeDialog({
         </div>
 
         <div className={styles.dialogFooter}>
-          <div>{error ? <p role="alert">{error}</p> : <span>创建空白草稿；示例内容不会写入你的简历。</span>}</div>
-          <button className="button button-primary" type="button" disabled={creating || loading || !track || (!target && !customTarget.trim()) || (track === "career" && !focusName.trim())} onClick={() => void createResume()}>
-            {creating ? <><LoaderCircle className={styles.spin} size={17} /> 正在创建…</> : <>创建并开始填写 <ArrowRight size={17} /></>}
+          <div id="create-next-hint" aria-live="polite">{error ? <p role="alert">{error}</p> : <span>{nextHint}</span>}</div>
+          <button className="button button-primary" type="button" aria-describedby="create-next-hint" disabled={creating || loading || (Boolean(track) && hasTarget && !needsFocus && !effectiveTemplateId)} onClick={advance}>
+            {creating ? <><LoaderCircle className={styles.spin} size={17} /> 正在创建…</> : <>{nextAction} <ArrowRight size={17} /></>}
           </button>
         </div>
       </div>

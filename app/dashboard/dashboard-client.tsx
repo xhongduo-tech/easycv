@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -18,7 +18,6 @@ import {
   Plus,
   RefreshCw,
   Search,
-  ShieldCheck,
   Trash2,
 } from "lucide-react";
 import { SiteFooter } from "@/components/site-footer";
@@ -30,8 +29,13 @@ import type { ResumeRecord, ResumeSummary, Track } from "@/types/resume";
 import { NewResumeDialog } from "./new-resume-dialog";
 import styles from "./dashboard.module.css";
 
+const subscribeToHydration = () => () => {};
+const clientSnapshot = () => true;
+const serverSnapshot = () => false;
+
 export function DashboardClient({ initialCreate = false, initialTrack }: { initialCreate?: boolean; initialTrack?: Track }) {
   const router = useRouter();
+  const hydrated = useSyncExternalStore(subscribeToHydration, clientSnapshot, serverSnapshot);
   const viewer = authClient.useSession();
   const [resumes, setResumes] = useState<ResumeSummary[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -152,7 +156,7 @@ export function DashboardClient({ initialCreate = false, initialTrack }: { initi
   }
 
   async function remove(resume: ResumeSummary) {
-    if (!window.confirm(`确认删除“${resume.title}”吗？当前演示版不提供恢复入口。`)) return;
+    if (!window.confirm(`确认删除“${resume.title}”吗？删除后无法恢复。`)) return;
     setBusyId(resume.id);
     try {
       const response = await fetch(`/api/resumes/${resume.id}`, { method: "DELETE" });
@@ -167,32 +171,26 @@ export function DashboardClient({ initialCreate = false, initialTrack }: { initi
 
   return (
     <main className={styles.page}>
-      <SiteHeader />
+      <SiteHeader variant="workspace" title="我的简历" />
       <section className={styles.dashboard}>
         <div className="shell">
           <div className={styles.welcome}>
             <div>
-              <p className={styles.workspaceLabel}>PERSONAL STUDIO <span>/ 我的工作台</span></p>
-              <h1>准备好下一次机会。</h1>
-              <p>整理经历，打磨表达，准备你的目标版本。</p>
+              <div className={styles.titleRow}><h1>我的简历</h1><span>{loading ? "正在加载" : `${resumes.length}${nextCursor ? "+" : ""} 份${query.trim() || filter !== "all" ? "匹配简历" : "简历"}`}</span></div>
+              <p>管理不同目标的版本，继续编辑或创建一份新简历。</p>
             </div>
-            <div className={styles.createActions}>
+            {(loading || resumes.length > 0 || query.trim() || filter !== "all") && <div className={styles.createActions}>
               <button className="button button-primary" type="button" onClick={() => setCreateOpen(true)}><Plus size={17} /> 新建简历</button>
-            </div>
+            </div>}
           </div>
 
-          {!viewer.isPending && !viewer.data?.user && (
+          {hydrated && !viewer.isPending && !viewer.data?.user && (
             <aside className={styles.guestBanner}>
-              <span><ShieldCheck size={21} /></span>
-              <div><strong>你的访客工作台</strong><p>登录后可跨设备继续，当前浏览器里的简历会自动并入账号。</p></div>
-              <div className={styles.guestBannerActions}><Link className="button button-primary" href="/auth/login?returnTo=%2Fdashboard">登录</Link><Link className="button button-secondary" href="/auth/register?returnTo=%2Fdashboard">创建账号</Link></div>
+              <p>当前以访客身份使用。登录后，这些简历会并入账号，可跨设备继续编辑。</p>
+              <Link href="/auth/login?returnTo=%2Fdashboard">登录并保存到账号 <ArrowRight size={14} /></Link>
             </aside>
           )}
 
-          <div className={styles.contentHeader}>
-            <div><h2>我的简历</h2><span>{loading ? "正在加载" : `${resumes.length}${nextCursor ? "+" : ""} 份版本`}</span></div>
-            <p>按最近编辑排序</p>
-          </div>
           <div className={styles.libraryTools}>
             <div className={styles.filters} role="group" aria-label="按材料用途筛选">
               {(["all", "study", "career"] as const).map((value) => <button type="button" key={value} aria-pressed={filter === value} className={filter === value ? styles.filterActive : ""} onClick={() => setFilter(value)}>{value === "all" ? "全部简历" : value === "study" ? "学习与研究" : "职业与合作"}</button>)}
@@ -202,6 +200,7 @@ export function DashboardClient({ initialCreate = false, initialTrack }: { initi
               <div className={styles.views} role="group" aria-label="显示方式"><button type="button" aria-pressed={view === "grid"} className={view === "grid" ? styles.viewActive : ""} onClick={() => setView("grid")} aria-label="网格视图"><LayoutGrid size={16} /></button><button type="button" aria-pressed={view === "list"} className={view === "list" ? styles.viewActive : ""} onClick={() => setView("list")} aria-label="列表视图"><List size={16} /></button></div>
             </div>
           </div>
+          {!loading && resumes.length > 0 && <p className={styles.sortNote}>按最近编辑排序</p>}
 
           {error && <div className={styles.error} role="alert"><span>{error}</span><button type="button" onClick={() => { setError(""); void load(); }}><RefreshCw size={14} /> 重试</button></div>}
 
@@ -210,9 +209,8 @@ export function DashboardClient({ initialCreate = false, initialTrack }: { initi
           ) : resumes.length === 0 ? (
             <div className={styles.empty}>
               <div className={styles.emptyCopy}>
-                <span className={styles.emptyLabel}>{query.trim() || filter !== "all" ? "SEARCH RESULTS" : "YOUR NEXT CHAPTER"}</span>
-                <h2>{query.trim() || filter !== "all" ? "还没有找到匹配的简历。" : <>好机会，<br />从一份好表达开始。</>}</h2>
-                <p>{query.trim() || filter !== "all" ? "换一个搜索词，或查看其他用途的版本。" : "选一个具体目标，留下一份独立版本。从空白草稿到可以交付的简历，一步步完成。"}</p>
+                <h2>{query.trim() || filter !== "all" ? "没有找到匹配的简历" : "创建你的第一份简历"}</h2>
+                <p>{query.trim() || filter !== "all" ? "换一个搜索词，或查看其他用途的版本。" : "选择用途和目标后即可开始填写。每个目标对应独立版本，方便持续修改。"}</p>
                 {query.trim() || filter !== "all" ? <button className="button button-secondary" type="button" onClick={() => { setQuery(""); setFilter("all"); }}>查看全部简历 <ArrowRight size={17} /></button> : <button className="button button-primary" type="button" onClick={() => setCreateOpen(true)}><Plus size={17} /> 创建第一份简历</button>}
               </div>
               <div className={styles.emptyArtwork} aria-hidden="true"><div className={styles.emptyPaper}><FilePlus2 size={24} /><span>你的名字</span><small>下一段经历，由你书写</small><i /><i /><i /><b /><i /><i /></div><span>每个目标，都值得认真准备</span></div>
@@ -224,7 +222,7 @@ export function DashboardClient({ initialCreate = false, initialTrack }: { initi
                   <article key={resume.id} className={styles.resumeCard} aria-busy={busyId === resume.id}>
                     <button className={styles.previewButton} type="button" onClick={() => router.push(`/builder/${resume.id}`)} aria-label={`打开 ${resume.title}`}>
                       <div className={styles.summaryPreview} data-track={resume.track}>
-                        <span className={styles.paperEyebrow}>PERSONAL PROFILE</span><strong>{resume.title}</strong><small>{resume.targetName}</small><div className={styles.paperRule} /><span className={styles.paperSection}>经历与成果</span><i /><i /><i /><div className={styles.paperRule} /><span className={styles.paperSection}>能力与方向</span><i /><i />
+                        <span className={styles.paperEyebrow}>个人简历</span><strong>{resume.title}</strong><small>{resume.targetName}</small><div className={styles.paperRule} /><span className={styles.paperSection}>经历与成果</span><i /><i /><i /><div className={styles.paperRule} /><span className={styles.paperSection}>能力与方向</span><i /><i />
                       </div>
                       <span className={styles.trackTag}>{resume.track === "study" ? <GraduationCap size={12} /> : <Building2 size={12} />}{resume.track === "study" ? "学习研究" : "职业合作"}</span>
                       <span className={styles.coverLabel}>版本封面</span>
@@ -251,7 +249,7 @@ export function DashboardClient({ initialCreate = false, initialTrack }: { initi
           )}
         </div>
       </section>
-      <SiteFooter />
+      <SiteFooter variant="workspace" />
       {createOpen && <NewResumeDialog initialTrack={initialTrack} onClose={closeCreate} />}
     </main>
   );

@@ -1,0 +1,75 @@
+.header {
+  position: sticky;
+  z-index: 50;
+  top: 0;
+  height: var(--header-height);
+  border-bottom: 1px solid var(--border);
+  background: var(--paper);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 400;
+}
+.inner { display: flex; height: 100%; align-items: center; gap: 32px; }
+.identity { display: flex; min-width: 0; align-items: center; gap: 24px; }
+.identity :global(.brand) { flex: 0 0 auto; }
+.location { display: flex; min-width: 0; align-items: center; gap: 12px; padding-left: 24px; border-left: 1px solid var(--border); color: var(--muted); white-space: nowrap; }
+.location a:hover { color: var(--brand); }
+.location > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.divider { color: var(--border-strong); }
+.navigation { display: flex; align-items: center; gap: 28px; }
+.navigation a { display: inline-flex; min-height: 44px; align-items: center; color: var(--muted); font-size: 14px; font-weight: 500; white-space: nowrap; }
+.navigation a:hover { color: var(--brand); }
+.actions { display: flex; flex: 0 0 auto; align-items: center; gap: 14px; margin-left: auto; }
+.loginAction, .primaryAction { display: inline-flex; min-height: 42px; align-items: center; justify-content: center; padding: 0 16px; border-radius: 6px; font-size: 14px; font-weight: 500; line-height: 1; white-space: nowrap; }
+.loginAction { color: var(--ink-soft); }
+.loginAction:hover { background: var(--surface-alt); color: var(--brand); }
+.primaryAction { color: #fff; background: var(--brand); }
+.primaryAction:hover { background: var(--brand-dark); }
+.loadingAccount, .loadingAction { display: block; height: 32px; border-radius: 6px; background: var(--surface-alt); }
+.loadingAccount { width: 44px; }
+.loadingAction { width: 88px; }
+.actions :global(.account-trigger) { min-height: 42px; padding: 4px; }
+.actions :global(.account-popover) { font-family: var(--font-ui); }
+.actions :global(.account-menu-item) { font-size: 14px; font-weight: 500; }
+.actions :global(.account-label strong), .actions :global(.account-summary strong) { font-size: 14px; font-weight: 600; }
+.mobileMenu { display: none; }
+@media (max-width: 900px) {
+  .inner { gap: 24px; }
+  .navigation { gap: 20px; }
+  .actions { gap: 6px; }
+  .loginAction, .primaryAction { padding-inline: 12px; }
+}
+@media (max-width: 760px) {
+  .inner { gap: 12px; }
+  .identity { gap: 16px; }
+  .location { padding-left: 16px; }
+  .navigation { display: none; }
+  .mobileMenu { display: block; }
+  .menuTrigger { display: inline-flex; min-height: 44px; align-items: center; gap: 4px; padding: 0 4px; cursor: pointer; list-style: none; color: var(--muted); font-size: 12px; font-weight: 500; }
+  .menuTrigger::-webkit-details-marker { display: none; }
+  .menuTrigger svg { transition: transform 160ms ease; }
+  .mobileMenu[open] .menuTrigger svg { transform: rotate(180deg); }
+  .mobileNavigation { position: absolute; top: calc(100% + 1px); right: 0; left: 0; display: grid; padding: 12px 18px; border-bottom: 1px solid var(--border); background: var(--paper); box-shadow: var(--shadow-sm); }
+  .mobileNavigation a { display: flex; min-height: 48px; align-items: center; padding-inline: 12px; border-radius: 6px; color: var(--ink-soft); font-size: 14px; font-weight: 500; }
+  .mobileNavigation a:hover { background: var(--surface-alt); color: var(--brand); }
+  .actions :global(.account-popover) { position: absolute; width: min(260px, calc(100vw - 36px)); }
+}
+@media (max-width: 480px) {
+  .inner { gap: 8px; }
+  .identity :global(.brand) { gap: 8px; }
+  .identity :global(.brand-mark) { width: 28px; height: 30px; border-radius: 5px; }
+  .identity :global(.brand-word) { font-size: 18px; }
+  .identity :global(.brand-word small) { display: none; }
+  .identity { gap: 12px; }
+  .location { padding-left: 12px; font-size: 14px; }
+  .location:has(a) { gap: 0; }
+  .location:has(a) > span { display: none; }
+  .actions { gap: 4px; }
+  .loginAction { padding-inline: 6px; }
+  .primaryAction { padding-inline: 8px; }
+  .loadingAccount { width: 36px; }
+  .loadingAction { width: 72px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .menuTrigger svg { transition: none; }
+}

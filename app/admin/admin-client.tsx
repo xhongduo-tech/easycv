@@ -60,7 +60,7 @@ export function AdminClient() {
 
   return (
     <main className={styles.page}>
-      <SiteHeader />
+      <SiteHeader variant="workspace" title="管理概览" />
       <section className={styles.adminShell}>
         <div className="shell">
           <div className={styles.adminHeader}>
@@ -131,7 +131,7 @@ export function AdminClient() {
           ) : null}
         </div>
       </section>
-      <SiteFooter />
+      <SiteFooter variant="workspace" />
     </main>
   );
 }

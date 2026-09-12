@@ -1,24 +1,39 @@
 import Link from "next/link";
-import { ArrowUpRight, FileText } from "lucide-react";
 import { Brand } from "@/components/brand";
-import { AccountMenu } from "@/components/account-menu";
+import { HeaderActions, HeaderMobileNavigation } from "@/components/site-header-actions";
+import styles from "./site-header.module.css";
 
-export function SiteHeader({ minimal = false }: { minimal?: boolean }) {
+export type SiteHeaderVariant = "marketing" | "workspace";
+
+const marketingLinks = [
+  { href: "/#opportunities", label: "产品介绍" },
+  { href: "/#templates", label: "简历版式" },
+  { href: "/pricing", label: "价格说明" },
+];
+
+export function SiteHeader({ variant = "marketing", title = "我的简历" }: {
+  variant?: SiteHeaderVariant;
+  title?: string;
+}) {
   return (
-    <header className="site-header">
-      <div className="shell header-inner">
-        <div className="header-identity"><Brand />{minimal && <span className="header-description">个人材料工作室</span>}</div>
-        <div className="header-actions">
-          <Link className="button button-ghost header-dashboard" href="/dashboard" aria-label="我的简历">
-            <FileText size={17} aria-hidden="true" />
-            <span>我的简历</span>
-          </Link>
-          <Link className="header-pricing" href="/pricing">定价</Link>
-          <div className="header-account"><AccountMenu compact={!minimal} /></div>
-          <Link className={`button ${minimal ? "button-secondary" : "button-primary"}`} href="/dashboard?new=1">
-            创建简历 <ArrowUpRight size={16} aria-hidden="true" />
-          </Link>
+    <header className={`site-header ${styles.header}`} data-site-header={variant}>
+      <div className={`shell ${styles.inner}`}>
+        <div className={styles.identity}>
+          <Brand />
+          {variant === "workspace" && (
+            <nav className={styles.location} aria-label="当前位置">
+              {title !== "我的简历" && <><Link href="/dashboard">我的简历</Link><span className={styles.divider} aria-hidden="true">/</span></>}
+              <span aria-current="page">{title}</span>
+            </nav>
+          )}
         </div>
+        {variant === "marketing" && <>
+          <nav className={styles.navigation} aria-label="产品导航">
+            {marketingLinks.map(({ href, label }) => <Link key={href} href={href}>{label}</Link>)}
+          </nav>
+          <HeaderMobileNavigation links={marketingLinks} />
+        </>}
+        <HeaderActions variant={variant} />
       </div>
     </header>
   );

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowDown, ArrowRight, ArrowUpRight, Check, FilePlus2, FileText, FilePenLine, Globe2, FolderArchive, Plus, ShieldCheck } from "lucide-react";
+import { ArrowDown, ArrowUpRight, Check, FilePlus2, FileText, FilePenLine, Globe2, FolderArchive, Plus, ShieldCheck } from "lucide-react";
 import { HomepageStory } from "@/components/homepage-story";
 import { HomepageOpportunities } from "@/components/homepage-opportunities";
 import { HomepageTemplates } from "@/components/homepage-templates";
@@ -24,7 +24,7 @@ const outputs = [
 export default function HomePage() {
   return (
     <HomepageExperience className={styles.home}>
-      <SiteHeader minimal />
+      <SiteHeader variant="marketing" />
 
       <section className={styles.hero} aria-labelledby="home-title">
         <div className={`shell ${styles.heroGrid}`}>
@@ -38,14 +38,11 @@ export default function HomePage() {
             </p>
             <div className={styles.heroActions}>
               <Link className={`button button-primary ${styles.primaryAction}`} href="/dashboard?new=1">
-                开始整理我的简历 <ArrowUpRight size={19} aria-hidden="true" />
+                创建简历 <ArrowUpRight size={19} aria-hidden="true" />
               </Link>
-              <Link className={styles.workspaceLink} href="/dashboard">
-                进入工作台 <ArrowRight size={16} aria-hidden="true" />
-              </Link>
+              <a className={styles.exploreLink} href="#opportunities">查看用途示例 <ArrowDown size={16} aria-hidden="true" /></a>
             </div>
             <p className={styles.startNote}><Check size={14} aria-hidden="true" /> 免费创建与编辑 · 导出无水印</p>
-            <a className={styles.exploreLink} href="#opportunities">选一个用途，看看怎么开始 <ArrowDown size={15} aria-hidden="true" /></a>
           </div>
 
           <HomepageStory />
@@ -53,25 +50,25 @@ export default function HomePage() {
       </section>
 
       <nav className={`shell ${styles.pageGuide}`} aria-label="首页内容导航">
-        <span>从这里，认识简迹</span>
-        <a href="#opportunities">为不同机会准备 <ArrowDown size={13} aria-hidden="true" /></a>
-        <a href="#how-it-works">看看表达示例 <ArrowDown size={13} aria-hidden="true" /></a>
-        <a href="#templates">找到合适版式 <ArrowDown size={13} aria-hidden="true" /></a>
-        <a href="#questions">开始前的问题 <ArrowDown size={13} aria-hidden="true" /></a>
+        <span>了解简迹</span>
+        <a href="#opportunities">适用场景 <ArrowDown size={14} aria-hidden="true" /></a>
+        <a href="#how-it-works">整理与审阅 <ArrowDown size={14} aria-hidden="true" /></a>
+        <a href="#templates">简历版式 <ArrowDown size={14} aria-hidden="true" /></a>
+        <a href="#questions">常见问题 <ArrowDown size={14} aria-hidden="true" /></a>
       </nav>
 
       <HomepageOpportunities />
 
       <section className={`shell ${styles.workflow}`} id="how-it-works" aria-labelledby="workflow-title">
         <div className={styles.sectionHeading} data-reveal>
-          <p className={styles.sectionKicker}>从经历，到表达 / THE DETAILS MATTER</p>
-          <h2 id="workflow-title">好表达的背后，<br />是说得清的经历。</h2>
+          <p className={styles.sectionKicker}>整理与审阅</p>
+          <h2 id="workflow-title">把经历写具体，<br />每一处修改都有依据。</h2>
           <p>先整理已有事实，再补齐关键细节。<br />最后由你核对来源，决定保留哪些修改。</p>
         </div>
         <figure className={styles.evidenceExample}>
           <ol className={styles.evidenceFlow}>
             <li data-reveal>
-              <div className={styles.exampleStep}><span>01</span><h3>从一句原话开始</h3></div>
+              <div className={styles.exampleStep}><h3>记录原始经历</h3></div>
               <div className={styles.originalNote}>
                 <span>你已有的经历</span>
                 <blockquote>“参与后台系统开发，<br />负责权限相关功能。”</blockquote>
@@ -79,7 +76,7 @@ export default function HomePage() {
               </div>
             </li>
             <li data-reveal data-reveal-delay="70">
-              <div className={styles.exampleStep}><span>02</span><h3>把你的贡献说具体</h3></div>
+              <div className={styles.exampleStep}><h3>补充具体贡献</h3></div>
               <div className={styles.questionNote}>
                 <span>一个值得补充的问题</span>
                 <p className={styles.exampleQuestion}>你具体完成了哪个模块？<br />它被谁使用？</p>
@@ -87,7 +84,7 @@ export default function HomePage() {
               </div>
             </li>
             <li data-reveal data-reveal-delay="140">
-              <div className={styles.exampleStep}><span>03</span><h3>留下一段有依据的表达</h3></div>
+              <div className={styles.exampleStep}><h3>核对候选表达</h3></div>
               <div className={styles.resultNote}>
                 <span>等待你审阅的候选</span>
                 <blockquote>独立实现后台权限配置模块，<mark>供 3 个业务组使用</mark>。</blockquote>
@@ -104,8 +101,8 @@ export default function HomePage() {
 
       <section className={`shell ${styles.deliverables}`} aria-labelledby="output-title">
         <div className={styles.sectionHeading} data-reveal>
-          <p className={styles.sectionKicker}>准备好，然后出发 / READY TO GO</p>
-          <h2 id="output-title">写好之后，<br />去你需要的地方。</h2>
+          <p className={styles.sectionKicker}>导出与留存</p>
+          <h2 id="output-title">按使用场景，<br />选择合适的文件格式。</h2>
           <p>同一份内容，按使用场景选择输出。<br />从正式投递，到继续编辑与留存。</p>
         </div>
         <div className={styles.outputGrid}>
@@ -123,8 +120,8 @@ export default function HomePage() {
       <section className={styles.questions} id="questions" aria-labelledby="questions-title">
         <div className={`shell ${styles.questionsGrid}`} data-reveal>
           <div className={styles.questionsIntro}>
-            <p className={styles.sectionKicker}>开始前，你可能想知道</p>
-            <h2 id="questions-title">把疑问留在这里，<br />带着想法开始。</h2>
+            <p className={styles.sectionKicker}>使用说明</p>
+            <h2 id="questions-title">常见问题</h2>
             <p>不必准备一份完美的旧简历。<br />从一段经历、一个目标开始就好。</p>
             <Link href="/privacy">了解资料与 AI 使用说明 <ArrowUpRight size={15} aria-hidden="true" /></Link>
           </div>
@@ -140,7 +137,6 @@ export default function HomePage() {
 
       <section className={`shell ${styles.closing}`} aria-labelledby="closing-title">
         <div data-reveal>
-          <p className={styles.sectionKicker}>YOUR NEXT CHAPTER</p>
           <h2 id="closing-title">好机会，<br />从一份好表达开始。</h2>
           <p className={styles.closingLead}>选一个具体目标，留下一份独立版本。<br />下一段经历，由你书写。</p>
           <Link className="button button-primary" href="/dashboard?new=1"><Plus size={18} aria-hidden="true" /> 创建第一份简历</Link>

@@ -699,6 +699,7 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
             <span>简历结构</span>
             <button ref={sidebarCloseRef} type="button" onClick={() => setSidebarOpen(false)} aria-label="关闭章节导航"><X size={17} /></button>
           </div>
+          <Link className={styles.sidebarBackLink} href="/dashboard"><ArrowLeft size={16} /> 返回我的简历</Link>
           <div className={styles.targetBadge}>
             <TargetBrandMark targetId={resume.targetProfileId} targetName={resume.targetName} track={resume.track} />
             <div><span>当前目标</span><strong>{resume.targetName}{resume.targetBrief?.focusName ? ` · ${resume.targetBrief.focusName}` : ""}</strong></div>

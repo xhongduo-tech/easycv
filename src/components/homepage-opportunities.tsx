@@ -79,17 +79,11 @@ export function HomepageOpportunities() {
       <div className="shell">
         <div className={styles.heading}>
           <div>
-            <p className={styles.kicker}>为不同的下一程</p>
-            <h2 id="opportunities-title">机会不同，<br />你的经历都有用。</h2>
+            <p className={styles.kicker}>适用场景</p>
+            <h2 id="opportunities-title">同一段经历，<br />为不同目标整理。</h2>
           </div>
           <p className={styles.intro}>不用先给自己贴上标签。<br />从这次想做的事出发，找到适合的表达。</p>
         </div>
-
-        <ol className={styles.guideTrail} aria-label="从用途开始的准备步骤">
-          <li><span aria-hidden="true">01</span> 选用途</li>
-          <li><span aria-hidden="true">02</span> 看示例</li>
-          <li><span aria-hidden="true">03</span> 准备自己的材料</li>
-        </ol>
 
         <div className={styles.layout}>
           <div className={styles.choices}>
@@ -103,7 +97,6 @@ export function HomepageOpportunities() {
                   aria-controls="opportunity-example"
                   onClick={() => setSelectedIndex(index)}
                 >
-                  <span className={styles.number} aria-hidden="true">0{index + 1}</span>
                   <span className={styles.choiceCopy}>
                     <strong>{opportunity.label}</strong>
                     <span>{opportunity.description}</span>
@@ -113,7 +106,7 @@ export function HomepageOpportunities() {
               ))}
             </div>
             <div className={styles.nextStep}>
-              <p className={styles.nextStepTitle}>从这里开始 · {selected.label}</p>
+              <p className={styles.nextStepTitle}>建议先准备</p>
               <p className={styles.nextStepCopy}>{selected.nextStep}</p>
               <div className={styles.nextStepActions}>
                 <button type="button" className={styles.viewExample} onClick={showExample} aria-controls="opportunity-example">
@@ -133,7 +126,6 @@ export function HomepageOpportunities() {
           <div className={styles.example} id="opportunity-example">
             <div className={styles.exampleLabel}>
               <h3 ref={exampleHeadingRef} tabIndex={-1}>{selected.label}示例</h3>
-              <span>0{selectedIndex + 1} / 04</span>
             </div>
             <div className={styles.exampleContent} key={selected.label}>
               <div className={styles.paperStack}>
