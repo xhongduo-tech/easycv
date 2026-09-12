@@ -12,10 +12,10 @@ export default function HomePage() {
       <section className={styles.hero}>
         <div className={`shell ${styles.heroGrid}`}>
           <div className={styles.heroCopy}>
-            <p className={styles.heroKicker}><Sparkles size={15} /> 从目标岗位，到投递版本</p>
-            <h1>把真实经历，变成<span>有说服力的简历。</span></h1>
+            <p className={styles.heroKicker}><Sparkles size={15} /> 为你的下一次机会，准备好材料</p>
+            <h1>让真实经历，<span>更有说服力。</span></h1>
             <p className={styles.lead}>
-              简迹先读懂岗位，再从你的真实经历中找到证据，逐条优化表达与版式。每一处修改都由你确认，最后直接导出 PDF 或个人网页。
+              求职、转岗、研究申请或项目合作，都从说清你的经历开始。把目标与材料放在一起，找到依据、补齐细节，逐条确认修改，再导出适合这次机会的简历。
             </p>
             <div className={styles.heroActions}>
               <Link className="button button-primary" href="/dashboard?new=1">
@@ -26,9 +26,9 @@ export default function HomePage() {
               </Link>
             </div>
             <div className={styles.promiseLine}>
-              <span><Check size={14} /> 不编造经历</span>
+              <span><Check size={14} /> 从真实材料出发</span>
               <span><Check size={14} /> 修改逐条确认</span>
-              <span><Check size={14} /> 一处完成输出</span>
+              <span><Check size={14} /> 面向不同目标</span>
             </div>
           </div>
 

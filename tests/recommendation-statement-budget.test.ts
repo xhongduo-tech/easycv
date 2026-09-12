@@ -234,7 +234,7 @@ function seedSuccessfulRequest(sqlite: DatabaseSync) {
     .run(expiresAt, SESSION_TOKEN, nowIso, nowIso, USER_ID, nowIso);
   sqlite.prepare(`INSERT INTO legal_acceptances
       (id, user_id, terms_version, privacy_version, acceptance_method, accepted_at)
-    VALUES ('budget-legal', ?, 'terms-2026-09-01-v2', 'privacy-2026-09-01-v1', 'consent-page', ?)`)
+    VALUES ('budget-legal', ?, 'terms-2026-09-01-v2', 'privacy-2026-09-13-v2', 'consent-page', ?)`)
     .run(USER_ID, nowIso);
 
   // The catalog is intentionally left empty. This dangling catalog reference

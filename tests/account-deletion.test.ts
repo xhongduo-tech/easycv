@@ -1,4 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { getDatabase } from "@/../db";
 import { deleteApplicationData } from "@/lib/account-deletion";
@@ -79,11 +81,77 @@ describe("atomic account deletion", () => {
     await syncSignupPromoIdentities(db, "promo-recreated", pepper);
     expect((await getCreditBalance(db, "promo-recreated")).total).toBe(0);
   });
+
+  it("cascades Codex material and runs while retaining anonymous platform budget", async () => {
+    const adapter = createDatabase();
+    seed(adapter.sqlite);
+    seedAgentJobs(adapter.sqlite);
+    const beforeBudget = adapter.sqlite.prepare("SELECT SUM(reserved_micros) AS total FROM agent_budget_ledger").get();
+
+    await deleteApplicationData(adapter as unknown as Database, "user-1");
+
+    expect(adapter.sqlite.prepare("SELECT id,user_id FROM agent_jobs").all())
+      .toEqual([{ id: "job-other", user_id: "other-user" }]);
+    expect(adapter.sqlite.prepare("SELECT job_id FROM agent_job_runs").all())
+      .toEqual([{ job_id: "job-other" }]);
+    const retained = adapter.sqlite.prepare(`SELECT job_id,user_id,reserved_micros,created_at
+      FROM agent_budget_ledger WHERE job_id IN ('job-owned-1','job-owned-2') ORDER BY job_id`).all() as Array<{
+        job_id: string; user_id: string; reserved_micros: number; created_at: string;
+      }>;
+    expect(retained).toHaveLength(2);
+    expect(retained.every((row) => /^deleted-agent-budget-[a-f0-9]{32}$/.test(row.user_id))).toBe(true);
+    expect(new Set(retained.map((row) => row.user_id)).size).toBe(2);
+    expect(retained.every((row) => row.reserved_micros === 5000 && row.created_at === "2026-09-01T00:00:00.000Z")).toBe(true);
+    expect(adapter.sqlite.prepare("SELECT user_id FROM agent_budget_ledger WHERE job_id='job-other'").get())
+      .toEqual({ user_id: "other-user" });
+    expect(adapter.sqlite.prepare("SELECT SUM(reserved_micros) AS total FROM agent_budget_ledger").get()).toEqual(beforeBudget);
+    expect(adapter.sqlite.prepare("SELECT id FROM users WHERE id='other-user'").get()).toEqual({ id: "other-user" });
+    expect(adapter.sqlite.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+
+    // Recreating even the same account key cannot erase the platform's spend
+    // reservation. Material has been removed; retained rows no longer identify it.
+    adapter.sqlite.prepare("INSERT INTO users(id) VALUES ('user-1')").run();
+    expect(adapter.sqlite.prepare("SELECT SUM(reserved_micros) AS total FROM agent_budget_ledger").get()).toEqual(beforeBudget);
+    expect(adapter.sqlite.prepare("SELECT job_id FROM agent_budget_ledger WHERE user_id='user-1'").all()).toEqual([]);
+  });
+
+  it("rolls back Codex cascades and budget anonymization if identity deletion fails", async () => {
+    const adapter = createDatabase(undefined, "DELETE FROM users WHERE id = ?");
+    seed(adapter.sqlite);
+    seedAgentJobs(adapter.sqlite);
+
+    await expect(deleteApplicationData(adapter as unknown as Database, "user-1"))
+      .rejects.toThrow("injected batch failure");
+
+    expect(adapter.sqlite.prepare("SELECT id FROM agent_jobs WHERE user_id='user-1' ORDER BY id").all())
+      .toEqual([{ id: "job-owned-1" }, { id: "job-owned-2" }]);
+    expect(adapter.sqlite.prepare("SELECT job_id FROM agent_job_runs ORDER BY job_id").all()).toHaveLength(3);
+    expect(adapter.sqlite.prepare("SELECT user_id FROM agent_budget_ledger WHERE job_id LIKE 'job-owned-%'").all())
+      .toEqual([{ user_id: "user-1" }, { user_id: "user-1" }]);
+    expect(adapter.sqlite.prepare("SELECT * FROM model_session_leases").all()).toEqual([]);
+  });
 });
+
+function seedAgentJobs(sqlite: DatabaseSync) {
+  sqlite.prepare("INSERT INTO users(id) VALUES ('other-user')").run();
+  sqlite.prepare("INSERT INTO resumes(id,user_id) VALUES ('resume-other','other-user')").run();
+  for (const [job, owner, resume] of [
+    ["job-owned-1", "user-1", "resume-1"], ["job-owned-2", "user-1", "resume-1"],
+    ["job-other", "other-user", "resume-other"],
+  ]) {
+    sqlite.prepare(`INSERT INTO agent_jobs
+      (id,user_id,resume_id,request_id,status,base_resume_revision,base_brief_revision,input_json,result_json,
+       stage,model,budget_micros,max_model_calls,max_output_tokens,consent_version,created_at,updated_at,expires_at)
+      VALUES (?,?,?,?,'queued',1,0,'{"sources":["personal material"]}','{"summary":"candidate"}',
+       'queued','codex-test',5000,2,512,'codex-v1','2026-09-01T00:00:00.000Z','2026-09-01T00:00:00.000Z','2026-10-01T00:00:00.000Z')`)
+      .run(job, owner, resume, `request-${job}`);
+    sqlite.prepare("UPDATE agent_jobs SET status='running',attempt=1,lease_token=? WHERE id=?").run(`lease-${job}`, job);
+  }
+}
 
 function seed(sqlite: DatabaseSync) {
   sqlite.prepare("INSERT INTO users (id) VALUES ('user-1')").run();
-  sqlite.prepare("INSERT INTO resumes VALUES ('resume-1', 'user-1')").run();
+  sqlite.prepare("INSERT INTO resumes(id,user_id) VALUES ('resume-1', 'user-1')").run();
   sqlite.prepare("INSERT INTO suggestion_events VALUES ('suggestion-1', 'resume-1')").run();
   sqlite.prepare("INSERT INTO resume_versions VALUES ('version-1', 'resume-1')").run();
   sqlite.prepare(`INSERT INTO ai_credit_lots
@@ -102,7 +170,7 @@ function seed(sqlite: DatabaseSync) {
     .run("b".repeat(64));
 }
 
-function createDatabase(failBatchAt?: number) {
+function createDatabase(failBatchAt?: number, failAtSql?: string) {
   const sqlite = new DatabaseSync(":memory:");
   sqlite.exec(`
     PRAGMA foreign_keys = ON;
@@ -120,7 +188,7 @@ function createDatabase(failBatchAt?: number) {
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE
     );
     CREATE TABLE model_session_leases (owner_key TEXT PRIMARY KEY, request_id TEXT, expires_at TEXT);
-    CREATE TABLE resumes (id TEXT PRIMARY KEY, user_id TEXT);
+    CREATE TABLE resumes (id TEXT PRIMARY KEY, user_id TEXT, deleted_at TEXT, updated_at TEXT);
     CREATE TABLE suggestion_events (id TEXT PRIMARY KEY, resume_id TEXT);
     CREATE TABLE resume_versions (id TEXT PRIMARY KEY, resume_id TEXT);
     CREATE TABLE resume_target_briefs (id TEXT PRIMARY KEY, user_id TEXT, resume_id TEXT);
@@ -159,7 +227,12 @@ function createDatabase(failBatchAt?: number) {
     CREATE TABLE model_usage_events (id TEXT PRIMARY KEY, user_id TEXT);
     CREATE TABLE audit_events (id TEXT PRIMARY KEY, actor_id TEXT);
     CREATE TABLE guest_sessions (id TEXT PRIMARY KEY, user_id TEXT);
+    CREATE TABLE app_schema_meta (key TEXT PRIMARY KEY, version INTEGER, updated_at TEXT);
   `);
+  // Exercise the real Codex migration, including both foreign keys and the
+  // budget/claim triggers, against SQLite with foreign keys enabled.
+  sqlite.exec(readFileSync(resolve(process.cwd(), "drizzle/0013_codex_agent_jobs.sql"), "utf8")
+    .replaceAll("--> statement-breakpoint", ""));
   return {
     sqlite,
     prepare(sql: string) {
@@ -170,7 +243,7 @@ function createDatabase(failBatchAt?: number) {
       try {
         const results = [];
         for (const [index, statement] of statements.entries()) {
-          if (index === failBatchAt) throw new Error("injected batch failure");
+          if (index === failBatchAt || statement.sql === failAtSql) throw new Error("injected batch failure");
           results.push(await statement.run());
         }
         sqlite.exec("COMMIT");
@@ -186,7 +259,7 @@ function createDatabase(failBatchAt?: number) {
 class Statement {
   private values: unknown[] = [];
 
-  constructor(private readonly sqlite: DatabaseSync, private readonly sql: string) {}
+  constructor(private readonly sqlite: DatabaseSync, readonly sql: string) {}
 
   bind(...values: unknown[]) {
     this.values = values;

@@ -220,7 +220,7 @@ export function DashboardClient({ initialCreate = false, initialTrack }: { initi
                       <div className={styles.summaryPreview} data-track={resume.track}>
                         <span /><strong>{resume.title.slice(0, 22)}</strong><i /><i /><i /><b /><b />
                       </div>
-                      <span className={styles.trackTag}>{resume.track === "study" ? <GraduationCap size={12} /> : <Building2 size={12} />}{resume.track === "study" ? "留学申请" : "毕业求职"}</span>
+                      <span className={styles.trackTag}>{resume.track === "study" ? <GraduationCap size={12} /> : <Building2 size={12} />}{resume.track === "study" ? "学习研究" : "职业合作"}</span>
                     </button>
                     <div className={styles.cardBody}>
                       <div className={styles.cardTitle}><div><h3>{resume.title}</h3><span><TargetBrandMark size="small" targetId={resume.targetProfileId} targetName={resume.targetName} track={resume.track} /> {resume.targetName}</span></div><details><summary aria-label="更多操作"><MoreHorizontal size={18} /></summary><div><button type="button" onClick={() => void rename(resume)}><Pencil size={14} /> 重命名</button><button type="button" onClick={() => void duplicate(resume)}><Copy size={14} /> 创建副本</button><button type="button" className={styles.deleteAction} onClick={() => void remove(resume)}><Trash2 size={14} /> 删除草稿</button></div></details></div>

@@ -166,8 +166,8 @@ export function NewResumeDialog({
 
   async function createResume() {
     if (!track) return setError("请先选择这份简历的用途");
-    if (!target && !customTarget.trim()) return setError(`请选择目标${track === "study" ? "院校" : "企业"}，或填写自定义目标`);
-    if (track === "career" && !focusName.trim()) return setError("请填写目标岗位；进入编辑器后可以继续补充岗位描述");
+    if (!target && !customTarget.trim()) return setError(`请选择目标${track === "study" ? "院校或研究机构" : "企业或合作方"}，或填写自定义目标`);
+    if (track === "career" && !focusName.trim()) return setError("请填写目标岗位或合作方向；进入编辑器后可以补充具体要求");
     const templateId = effectiveTemplateId;
     if (!templateId) return setError("暂时无法匹配版式，请稍后重试");
 
@@ -209,20 +209,20 @@ export function NewResumeDialog({
 
         <div className={styles.dialogBody}>
           <section className={styles.createSection}>
-            <div className={styles.createSectionTitle}><span>1</span><div><h3>这份简历用于什么？</h3><p>后续建议会围绕这个用途展开。</p></div></div>
+            <div className={styles.createSectionTitle}><span>1</span><div><h3>你正在准备哪一类机会？</h3><p>选择材料用途，不限制你的身份或职业阶段。</p></div></div>
             <div className={styles.purposeChoices}>
               <button type="button" disabled={creating} aria-pressed={track === "study"} className={track === "study" ? styles.purposeActive : ""} onClick={() => changeTrack("study")}>
-                <GraduationCap size={21} /><div><strong>留学申请</strong><small>院校 · 项目 · 学位</small></div>{track === "study" && <Check size={17} />}
+                <GraduationCap size={21} /><div><strong>学习与研究</strong><small>院校 · 研究项目 · 学位</small></div>{track === "study" && <Check size={17} />}
               </button>
               <button type="button" disabled={creating} aria-pressed={track === "career"} className={track === "career" ? styles.purposeActive : ""} onClick={() => changeTrack("career")}>
-                <BriefcaseBusiness size={21} /><div><strong>毕业求职</strong><small>企业 · 岗位 · 层级</small></div>{track === "career" && <Check size={17} />}
+                <BriefcaseBusiness size={21} /><div><strong>职业与合作</strong><small>求职 · 转岗 · 项目合作</small></div>{track === "career" && <Check size={17} />}
               </button>
             </div>
           </section>
 
           {track && (
             <section className={styles.createSection}>
-              <div className={styles.createSectionTitle}><span>2</span><div><h3>目标是什么？</h3><p>选择具体{track === "study" ? "院校" : "企业"}后自动匹配版式；也可以直接搜索或自定义。</p></div></div>
+              <div className={styles.createSectionTitle}><span>2</span><div><h3>目标是什么？</h3><p>选择已有目标匹配版式，也可以自定义{track === "study" ? "院校、机构或研究项目" : "企业、客户或合作项目"}。</p></div></div>
               <div className={styles.groupChips} role="group" aria-label={track === "study" ? "院校地区" : "企业类型"}>
                 {groups.map((group) => <button type="button" disabled={creating} key={group.key} aria-pressed={!query && selectedGroup === group.key} className={!query && selectedGroup === group.key ? styles.groupActive : ""} onClick={() => { setSelectedGroup(group.key); setQuery(""); setSelectedTarget(""); setCustomTarget(""); }}>{group.label}<small>{group.count}</small></button>)}
               </div>
@@ -254,20 +254,20 @@ export function NewResumeDialog({
                     setSelectedTemplate(templates.some((template) => template.id === fallbackId) ? fallbackId : templates[0]?.id ?? "");
                   }
                 }
-              }} maxLength={240} placeholder={`输入自定义${track === "study" ? "院校或项目" : "企业"}`} /></label>
+              }} maxLength={240} placeholder={`输入自定义${track === "study" ? "院校、机构或项目" : "企业、客户或合作项目"}`} /></label>
             </section>
           )}
 
           {track === "career" && (target || customTarget.trim()) && (
             <section className={styles.createSection}>
-              <div className={styles.createSectionTitle}><span>3</span><div><h3>目标岗位是什么？</h3><p>岗位名称会帮助我们推荐版式并确定写作重点；JD 可进入编辑器后补充。</p></div></div>
+              <div className={styles.createSectionTitle}><span>3</span><div><h3>目标岗位或合作方向是什么？</h3><p>帮助我们推荐版式并确定表达重点；具体要求可进入编辑器后补充。</p></div></div>
               <label className={styles.focusField}>
-                <span>岗位名称</span>
+                <span>岗位或方向</span>
                 <input
                   value={focusName}
                   disabled={creating}
                   onChange={(event) => setFocusName(event.target.value)}
-                  placeholder="例如：产品经理、后端开发工程师、投行分析师"
+                  placeholder="例如：产品经理、研发负责人、独立设计合作"
                   maxLength={160}
                 />
               </label>

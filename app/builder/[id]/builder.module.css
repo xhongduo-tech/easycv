@@ -2032,3 +2032,16 @@
   .importFooter > div { display: grid; grid-template-columns: 1fr 1.3fr; }
   .importFooter :global(.button) { width: 100%; }
 }
+.legacyAdvice {
+  margin-top: 20px;
+  border-top: 1px solid var(--line, #e1e5e8);
+  padding-top: 16px;
+}
+
+.legacyAdvice > summary {
+  cursor: pointer;
+  color: var(--muted, #586575);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 10px 0 16px;
+}

@@ -4,6 +4,7 @@ import { ensureDatabase, getDatabase } from "@/../db";
 import { apiError, withApiError } from "@/lib/api";
 import { hasValidMaintenanceCredential } from "@/lib/maintenance-auth";
 import { runRetentionMaintenance } from "@/lib/retention";
+import { maintainAgentJobs } from "@/lib/agent-jobs";
 
 export async function POST(request: Request) {
   try {
@@ -12,7 +13,8 @@ export async function POST(request: Request) {
     }
     await ensureDatabase();
     const result = await runRetentionMaintenance(getDatabase(), { apply: true });
-    return NextResponse.json({ status: "ok", ...result }, {
+    const agentTasks = await maintainAgentJobs(getDatabase());
+    return NextResponse.json({ status: "ok", ...result, agentTasks }, {
       headers: { "cache-control": "private, no-store" },
     });
   } catch (error) {

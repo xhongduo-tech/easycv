@@ -52,6 +52,9 @@ export async function buildAccountExport(
     creditOrders,
     modelRuns,
     adviceDeliveries,
+    agentJobs,
+    agentRuns,
+    agentBudget,
     audit,
   ] = await Promise.all([
     db.prepare(`SELECT id, name, email, email_verified, image, role, banned,
@@ -103,6 +106,22 @@ export async function buildAccountExport(
         terminal_at, failure_kind, created_at, expires_at
       FROM model_advice_deliveries WHERE user_id = ? ORDER BY created_at
       LIMIT ${ACCOUNT_EXPORT_QUERY_ROW_LIMIT}`).bind(userId).all<Record<string, unknown>>(),
+    db.prepare(`SELECT id, resume_id, status, version, base_resume_revision, base_brief_revision,
+        input_json, result_json, error, stage, model, budget_micros, max_model_calls,
+        max_output_tokens, attempt, applied_revision, applied_proposal_ids_json,
+        consent_version, created_at, updated_at, expires_at
+      FROM agent_jobs WHERE user_id = ? ORDER BY created_at
+      LIMIT ${ACCOUNT_EXPORT_QUERY_ROW_LIMIT}`).bind(userId).all<Record<string, unknown>>(),
+    // agent_job_runs.id is the execution lease token. Only export the public
+    // job/attempt reference and metering fields, never that capability.
+    db.prepare(`SELECT job_id, attempt, state, input_tokens, cached_input_tokens,
+        output_tokens, model_calls, cost_micros, price_version, cost_basis, failure_code, created_at, settled_at
+      FROM agent_job_runs WHERE job_id IN (SELECT id FROM agent_jobs WHERE user_id = ?)
+      ORDER BY created_at, attempt
+      LIMIT ${ACCOUNT_EXPORT_QUERY_ROW_LIMIT}`).bind(userId).all<Record<string, unknown>>(),
+    db.prepare(`SELECT job_id, reserved_micros, created_at
+      FROM agent_budget_ledger WHERE user_id = ? ORDER BY created_at
+      LIMIT ${ACCOUNT_EXPORT_QUERY_ROW_LIMIT}`).bind(userId).all<Record<string, unknown>>(),
     db.prepare(`SELECT action, resource_type, resource_id, created_at
       FROM audit_events WHERE actor_id = ? ORDER BY created_at
       LIMIT ${ACCOUNT_EXPORT_QUERY_ROW_LIMIT}`).bind(userId).all<Record<string, unknown>>(),
@@ -124,11 +143,17 @@ export async function buildAccountExport(
       creditOrders,
       modelRuns,
       adviceDeliveries,
+      agentJobs,
+      agentRuns,
+      agentBudget,
       audit,
     ].reduce<number>((total, result) => total + exportRows(result).length, 0),
     contentBytes: sumUtf8Bytes(exportRows(resumes), "content_json")
       + sumUtf8Bytes(exportRows(versions), "content_json")
-      + sumUtf8Bytes(exportRows(briefs), "requirements_text"),
+      + sumUtf8Bytes(exportRows(briefs), "requirements_text")
+      + sumUtf8Bytes(exportRows(agentJobs), "input_json")
+      + sumUtf8Bytes(exportRows(agentJobs), "result_json")
+      + sumUtf8Bytes(exportRows(agentJobs), "applied_proposal_ids_json"),
   });
   return {
     schemaVersion: 1,
@@ -149,6 +174,7 @@ export async function buildAccountExport(
       modelRuns: modelRuns.results,
       requestHistory: adviceDeliveries.results,
     },
+    agentTasks: { jobs: agentJobs.results, runs: agentRuns.results, budgetReservations: agentBudget.results },
     auditEvents: audit.results,
   };
 }
@@ -188,6 +214,16 @@ async function estimateAccountExport(db: Database, userId: string): Promise<Acco
       SELECT COUNT(*), 0 FROM model_run_costs WHERE user_id = (SELECT user_id FROM export_owner)
       UNION ALL
       SELECT COUNT(*), 0 FROM model_advice_deliveries WHERE user_id = (SELECT user_id FROM export_owner)
+      UNION ALL
+      SELECT COUNT(*), COALESCE(SUM(length(CAST(input_json AS BLOB))
+          + COALESCE(length(CAST(result_json AS BLOB)), 0)
+          + COALESCE(length(CAST(applied_proposal_ids_json AS BLOB)), 0)), 0)
+        FROM agent_jobs WHERE user_id = (SELECT user_id FROM export_owner)
+      UNION ALL
+      SELECT COUNT(*), 0 FROM agent_job_runs
+        WHERE job_id IN (SELECT id FROM agent_jobs WHERE user_id = (SELECT user_id FROM export_owner))
+      UNION ALL
+      SELECT COUNT(*), 0 FROM agent_budget_ledger WHERE user_id = (SELECT user_id FROM export_owner)
       UNION ALL
       SELECT COUNT(*), 0 FROM audit_events WHERE actor_id = (SELECT user_id FROM export_owner)
     )

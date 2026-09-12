@@ -1,6 +1,73 @@
 import { sql } from "drizzle-orm";
 import { check, index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
+// Codex jobs use a separate lifecycle and budget from the synchronous advisor.
+export const agentJobs = sqliteTable("agent_jobs", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  resumeId: text("resume_id").notNull().references(() => resumes.id, { onDelete: "cascade" }),
+  requestId: text("request_id").notNull(),
+  status: text("status").notNull(), version: integer("version").notNull().default(1),
+  baseResumeRevision: integer("base_resume_revision").notNull(),
+  baseBriefRevision: integer("base_brief_revision").notNull(),
+  inputJson: text("input_json").notNull(), resultJson: text("result_json"),
+  error: text("error"), stage: text("stage").notNull(), model: text("model").notNull(),
+  budgetMicros: integer("budget_micros").notNull(),
+  maxModelCalls: integer("max_model_calls").notNull(), maxOutputTokens: integer("max_output_tokens").notNull(),
+  attempt: integer("attempt").notNull().default(0), leaseToken: text("lease_token"),
+  leaseExpiresAt: text("lease_expires_at"), applyToken: text("apply_token"),
+  appliedRevision: integer("applied_revision"), appliedProposalIdsJson: text("applied_proposal_ids_json"),
+  consentVersion: text("consent_version").notNull(), createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(), expiresAt: text("expires_at").notNull(),
+}, (table) => [
+  uniqueIndex("idx_agent_jobs_request").on(table.userId, table.requestId),
+  index("idx_agent_jobs_owner").on(table.userId, table.resumeId, table.createdAt),
+  index("idx_agent_jobs_queue").on(table.status, table.createdAt),
+  check("chk_agent_jobs_status", sql`${table.status} IN ('queued','running','waiting_input','ready','applied','failed','cancelled','expired')`),
+  check("chk_agent_jobs_version", sql`${table.version} > 0`),
+  check("chk_agent_jobs_attempt", sql`${table.attempt} BETWEEN 0 AND 3`),
+  check("chk_agent_jobs_budget", sql`${table.budgetMicros} > 0`),
+  check("chk_agent_jobs_input", sql`json_valid(${table.inputJson})`),
+  check("chk_agent_jobs_resume_revision", sql`${table.baseResumeRevision} > 0`),
+  check("chk_agent_jobs_brief_revision", sql`${table.baseBriefRevision} >= 0`),
+  check("chk_agent_jobs_result", sql`${table.resultJson} IS NULL OR json_valid(${table.resultJson})`),
+  check("chk_agent_jobs_applied_ids", sql`${table.appliedProposalIdsJson} IS NULL OR json_valid(${table.appliedProposalIdsJson})`),
+  check("chk_agent_jobs_calls", sql`${table.maxModelCalls} BETWEEN 1 AND 12`),
+  check("chk_agent_jobs_output", sql`${table.maxOutputTokens} BETWEEN 512 AND 8000`),
+]);
+
+export const agentJobRuns = sqliteTable("agent_job_runs", {
+  id: text("id").primaryKey(),
+  jobId: text("job_id").notNull().references(() => agentJobs.id, { onDelete: "cascade" }),
+  attempt: integer("attempt").notNull(), state: text("state").notNull(),
+  inputTokens: integer("input_tokens").notNull().default(0), cachedInputTokens: integer("cached_input_tokens").notNull().default(0),
+  outputTokens: integer("output_tokens").notNull().default(0), modelCalls: integer("model_calls").notNull().default(0),
+  costMicros: integer("cost_micros").notNull().default(0), failureCode: text("failure_code"),
+  priceVersion: text("price_version"), costBasis: text("cost_basis").notNull().default("unknown"),
+  createdAt: text("created_at").notNull(), settledAt: text("settled_at"),
+}, (table) => [
+  uniqueIndex("idx_agent_job_runs_attempt").on(table.jobId, table.attempt),
+  check("chk_agent_job_runs_attempt", sql`${table.attempt} BETWEEN 1 AND 3`),
+  check("chk_agent_job_runs_state", sql`${table.state} IN ('running','succeeded','failed','cancelled','unknown')`),
+  check("chk_agent_job_runs_input", sql`${table.inputTokens} >= 0`),
+  check("chk_agent_job_runs_cache", sql`${table.cachedInputTokens} BETWEEN 0 AND ${table.inputTokens}`),
+  check("chk_agent_job_runs_output", sql`${table.outputTokens} >= 0`),
+  check("chk_agent_job_runs_calls", sql`${table.modelCalls} BETWEEN 0 AND 12`),
+  check("chk_agent_job_runs_cost", sql`${table.costMicros} >= 0`),
+  check("chk_agent_job_runs_basis", sql`${table.costBasis} IN ('measured','reserved','unknown')`),
+]);
+
+export const agentBudgetLedger = sqliteTable("agent_budget_ledger", {
+  jobId: text("job_id").primaryKey(), userId: text("user_id").notNull(),
+  reservedMicros: integer("reserved_micros").notNull(), createdAt: text("created_at").notNull(),
+}, (table) => [index("idx_agent_budget_day").on(table.createdAt, table.userId),
+  check("chk_agent_budget_positive", sql`${table.reservedMicros} > 0`)]);
+
+export const agentRuntimeState = sqliteTable("agent_runtime_state", {
+  id: text("id").primaryKey(), lastSeenAt: text("last_seen_at").notNull(),
+  workerId: text("worker_id").notNull(), model: text("model").notNull(),
+});
+
 export const appSchemaMeta = sqliteTable(
   "app_schema_meta",
   {

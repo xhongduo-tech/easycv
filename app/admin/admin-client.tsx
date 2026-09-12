@@ -22,7 +22,7 @@ import {
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { formatDate } from "@/lib/utils";
-import type { AdminOverview, AdminResumeSummary } from "@/types/resume";
+import type { AdminAgentMetrics, AdminOverview, AdminResumeSummary } from "@/types/resume";
 import styles from "./admin.module.css";
 
 type OverviewResponse = AdminOverview & { currentAdmin: { role: string; mode: string } };
@@ -80,11 +80,13 @@ export function AdminClient() {
               <div className={styles.metrics}>
                 <Metric icon={FileText} label="有效简历" value={overview.metrics.totalResumes} note="未归档目标版本" />
                 <Metric icon={LayoutTemplate} label="启用模板" value={overview.metrics.activeTemplates} note="原创布局模板" />
-                <Metric icon={Target} label="目标画像" value={overview.metrics.targetProfiles} note="大学与企业画像" />
+                <Metric icon={Target} label="目标画像" value={overview.metrics.targetProfiles} note="机构与职业目标画像" />
                 <Metric icon={Sparkles} label="平均完整度" value={`${overview.metrics.averageProgress}%`} note="基于当前草稿" />
-                <Metric icon={Activity} label="今日增强优化" value={overview.metrics.modelRunsToday} note={`峰值估算成本 ¥${overview.metrics.estimatedModelCostTodayYuan.toFixed(3)}`} />
+                <Metric icon={Activity} label="今日 DeepSeek 增强" value={overview.metrics.modelRunsToday} note={`DeepSeek 峰值估算 ¥${overview.metrics.estimatedModelCostTodayYuan.toFixed(3)}`} />
                 <Metric icon={Coins} label="待使用简迹点" value={overview.metrics.outstandingAiCredits} note="赠送与已购有效余额" />
               </div>
+
+              <AgentMetricsPanel metrics={overview.agentMetrics} />
 
               <div className={styles.dashboardGrid}>
                 <section className={styles.recentPanel}>
@@ -92,7 +94,7 @@ export function AdminClient() {
                   {overview.recentResumes.length ? (
                     <div className={styles.tableWrap}>
                       <table>
-                        <thead><tr><th>简历</th><th>赛道</th><th>目标</th><th>进度</th><th>更新时间</th></tr></thead>
+                        <thead><tr><th>简历</th><th>用途</th><th>目标</th><th>进度</th><th>更新时间</th></tr></thead>
                         <tbody>{overview.recentResumes.map((resume) => <ResumeRow key={resume.id} resume={resume} />)}</tbody>
                       </table>
                     </div>
@@ -100,9 +102,9 @@ export function AdminClient() {
                 </section>
 
                 <aside className={styles.breakdownPanel}>
-                  <div className={styles.panelHeader}><div><span>目标分布</span><h2>赛道构成</h2></div><Activity size={18} /></div>
+                  <div className={styles.panelHeader}><div><span>目标分布</span><h2>材料用途</h2></div><Activity size={18} /></div>
                   <div className={styles.breakdownBars}>
-                    {[{ label: "study", display: "留学申请" }, { label: "career", display: "毕业求职" }].map((entry) => {
+                    {[{ label: "study", display: "学习与研究" }, { label: "career", display: "职业与合作" }].map((entry) => {
                       const value = Number(overview.trackBreakdown.find((item) => item.label === entry.label)?.value ?? 0);
                       return <div key={entry.label}><div><span>{entry.display}</span><strong>{value}</strong></div><i><span style={{ width: `${(value / maxBreakdown) * 100}%` }} /></i></div>;
                     })}
@@ -121,8 +123,8 @@ export function AdminClient() {
               </div>
 
               <section className={styles.systemPanel}>
-                <div><span className={styles.healthIcon}><CheckCircle2 size={21} /></span><div><strong>平台运行正常</strong><p>数据库绑定、模板目录与本地建议引擎均可用。</p></div></div>
-                <div className={styles.systemItems}><span><i /> D1 数据库</span><span><i /> 本地建议引擎</span><span><i /> 版本审计</span></div>
+                <div><span className={styles.healthIcon}><CheckCircle2 size={21} /></span><div><strong>平台汇总已读取</strong><p>执行服务状态请查看 Codex 面板；更多检查见健康接口。</p></div></div>
+                <div className={styles.systemItems}><span><i /> 数据库查询完成</span><span><i /> 管理员权限已验证</span></div>
                 <Link className="button button-dark" href="/api/health">查看健康检查 <ArrowRight size={15} /></Link>
               </section>
             </>
@@ -139,7 +141,46 @@ function Metric({ icon: Icon, label, value, note }: { icon: typeof FileText; lab
 }
 
 function ResumeRow({ resume }: { resume: AdminResumeSummary }) {
-  return <tr><td><span className={styles.resumeIdentity}><span className={styles.fileIcon}><FileText size={15} /></span><span><strong>{resume.title}</strong><small>修订 {resume.revision}</small></span></span></td><td><span className={styles.trackPill}>{resume.track === "study" ? "留学" : "求职"}</span></td><td>{resume.targetName}</td><td><div className={styles.tableProgress}><i><span style={{ width: `${resume.progress}%` }} /></i><strong>{resume.progress}%</strong></div></td><td><span className={styles.time}><Clock3 size={12} />{formatDate(resume.updatedAt)}</span></td></tr>;
+  return <tr><td><span className={styles.resumeIdentity}><span className={styles.fileIcon}><FileText size={15} /></span><span><strong>{resume.title}</strong><small>修订 {resume.revision}</small></span></span></td><td><span className={styles.trackPill}>{resume.track === "study" ? "学习研究" : "职业合作"}</span></td><td>{resume.targetName}</td><td><div className={styles.tableProgress}><i><span style={{ width: `${resume.progress}%` }} /></i><strong>{resume.progress}%</strong></div></td><td><span className={styles.time}><Clock3 size={12} />{formatDate(resume.updatedAt)}</span></td></tr>;
+}
+
+const agentStatusLabels: Record<string, string> = {
+  queued: "排队", running: "执行中", waiting_input: "等待补充", ready: "候选就绪",
+  applied: "已应用", failed: "失败", cancelled: "已取消", expired: "已到期",
+};
+const usd = (micros: number) => `US$${(micros / 1_000_000).toFixed(4)}`;
+const rate = (value: number | null) => value === null ? "—" : `${(value * 100).toFixed(1)}%`;
+
+function AgentMetricsPanel({ metrics }: { metrics: AdminAgentMetrics }) {
+  const runtime = metrics.runtime;
+  const usage = metrics.usage24h;
+  const cohort = metrics.sevenDays;
+  return <section className={styles.agentPanel} aria-labelledby="agent-metrics-title">
+    <div className={styles.panelHeader}><div><span>Codex 材料任务 · 平台汇总</span><h2 id="agent-metrics-title">从执行到用户确认</h2></div><span className={styles.agentAvailability} data-online={runtime.acceptingJobs}><i />{runtime.acceptingJobs ? "可接受任务" : runtime.switchEnabled ? "执行条件未就绪" : "任务开关已关闭"}</span></div>
+    <div className={styles.agentBody}>
+      <dl className={styles.agentRuntime}>
+        <div><dt>任务开关 / 配置</dt><dd>{runtime.switchEnabled ? "已开启" : "已关闭"} / {runtime.configurationReady ? "已齐备" : "待配置"}</dd></div>
+        <div><dt>执行服务</dt><dd>{runtime.runnerOnline ? "在线 · 最近 2 分钟有匹配心跳" : "离线或模型不匹配"}</dd></div>
+        <div><dt>最近心跳</dt><dd>{runtime.lastHeartbeatAt ? <time dateTime={runtime.lastHeartbeatAt}>{new Date(runtime.lastHeartbeatAt).toLocaleString("zh-CN", { hour12: false })}</time> : "尚无记录"}</dd></div>
+        <div><dt>配置模型 / 执行模型</dt><dd>{runtime.model || "未设置"} / {runtime.runnerModel || "未连接"}</dd></div>
+      </dl>
+      <div className={styles.agentCounts}>{metrics.statusCounts.map((item) => <div key={item.status} data-status={item.status}><span>{agentStatusLabels[item.status] ?? item.status}</span><strong>{item.count}</strong></div>)}</div>
+      <div className={styles.agentQuality}>
+        <div><small>近 7 天创建任务</small><strong>{cohort.createdJobs}</strong><span>{cohort.closedJobs} 个已结束</span></div>
+        <div><small>候选交付率</small><strong>{rate(cohort.successRate)}</strong><span>{cohort.deliveredJobs} / {cohort.closedJobs} 个已结束任务</span></div>
+        <div><small>用户应用率</small><strong>{rate(cohort.applicationRate)}</strong><span>{cohort.appliedJobs} / {cohort.deliveredJobs} 个已交付任务</span></div>
+      </div>
+      <p className={styles.agentDefinition}>交付指候选就绪或已应用；已结束包含失败、取消和到期。质量统计仅覆盖仍保留、近 7 天创建的任务，已删除任务不在其中。</p>
+      <div className={styles.agentCostHeader}><h3>近 24 小时 · USD</h3><span>{runtime.maxJobsPerDay} 个任务 / 用户 / 日</span></div>
+      <div className={styles.agentCosts}>
+        <div><small>整任务预算预留</small><strong>{usd(usage.retainedReservedUsdMicros)}</strong><span>平台上限 {usage.platformCapUsdMicros > 0 ? usd(usage.platformCapUsdMicros) : "未配置"}</span></div>
+        <div><small>已知 token 用量估算</small><strong>{usage.returnedRuns ? usd(usage.returnedEstimatedCostUsdMicros) : "—"}</strong><span>{usage.returnedRuns} 次已知用量回执</span></div>
+        <div><small>回执保守占额</small><strong>{usage.conservativeRuns ? usd(usage.conservativeReportedCostUsdMicros) : "—"}</strong><span>{usage.conservativeRuns} 次按预留额记账</span></div>
+      </div>
+      <div className={styles.agentUncertainty} data-warning={usage.unknownRuns > 0 || usage.unsettledRuns > 0}><span>费用不确定 <strong>{usage.unknownRuns}</strong> 次</span><span>尚未结算 <strong>{usage.unsettledRuns}</strong> 次</span></div>
+      <p className={styles.agentDefinition}>预留按完整任务上限计算，删除材料仍保留平台占额。费用统计覆盖近 24 小时启动且仍保留的执行；可计量回执是估算，保守占额与未知用量单列，不代表完整实际账单。USD 与 DeepSeek 人民币分开统计。</p>
+    </div>
+  </section>;
 }
 
 function GovernanceCard({ icon: Icon, label, title, text, tags }: { icon: typeof FileText; label: string; title: string; text: string; tags: string[] }) {

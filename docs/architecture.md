@@ -2,7 +2,7 @@
 
 ## 1. 架构决策
 
-当前版本采用模块化单体，运行在 Sites / Cloudflare Worker 兼容环境中：
+业务应用运行在 Sites / Cloudflare Worker 兼容环境中，Codex 任务执行使用独立 Linux Node 服务；D1 保存持久任务与最终资料：
 
 ```mermaid
 flowchart LR
@@ -17,15 +17,24 @@ flowchart LR
   Domain --> D1[(Cloudflare D1)]
   Domain --> Advisor[Local Advisor]
   Domain --> Evidence[JD Evidence Mapper]
+  Domain --> Tasks[Durable Agent Jobs + Budget + Revision CAS]
+  Tasks --> D1
+  Runner[Linux Codex SDK Runner] --> Internal[Authenticated Claim / Heartbeat / Result API]
+  Internal --> Tasks
+  Runner --> Proxy[Per-task Token and Cost Gateway]
+  Proxy --> OpenAI[OpenAI Responses API]
   App --> Renderer[Canonical Resume Renderer]
   Renderer --> ClientOutput[Browser PDF / DOCX / PNG / TXT / JSON / HTML / Pages ZIP]
   Routes --> ServerExport[Saved TXT / JSON / Static HTML]
   Domain --> Growth[Growth Route Catalog]
 ```
 
-选择模块化单体而非微服务，是为了在产品验证阶段保持一条可测试、可部署的完整链路。未来若开放云端文件处理、OCR、AI 或异步批量导出，可按边界拆为 Worker，而简历领域模型和 API 契约保持稳定。
+身份、业务校验、数据保存和浏览器导出保留现有应用边界。Codex SDK 依赖进程运行环境，因此单独部署执行服务；它通过受控任务 API 领取和回传结果，用户确认后由业务服务保存。当前工具执行仅覆盖材料分析、追问与结构化生成，完整边界和启用步骤见 [Codex 任务运行手册](codex-agent-operations.md)。
 
 ## 2. 模块边界
+
+- Agent Tasks：持久任务、材料快照、最多三轮执行、来源约束、逐项确认与原子修订保存，支持取消和幂等恢复。
+- Agent Runner：锁定 Codex SDK / CLI 版本，独立 UID 与短期凭据代理，执行额度与用户简迹点分开；不直接修改数据库或正式简历。
 
 - Identity：Better Auth 提供邮箱、Google、GitHub、微信网站应用与中国大陆手机号认证，配套邮箱验证、密码重置、会话、账号绑定、停用与角色；随机 HttpOnly 访客会话仍可试用，登录后由服务端一次性认领其草稿。
 - Target Catalog：101 所院校与 85 家企业的编辑适配方案，包含类别、地区、关键词、优先级、来源类型与复核时间。

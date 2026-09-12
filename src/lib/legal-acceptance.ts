@@ -4,7 +4,7 @@ type Database = ReturnType<typeof getDatabase>;
 
 export const CURRENT_LEGAL_DOCUMENTS = {
   termsVersion: "terms-2026-09-01-v2",
-  privacyVersion: "privacy-2026-09-01-v1",
+  privacyVersion: "privacy-2026-09-13-v2",
 } as const;
 
 export class LegalAcceptanceRequiredError extends Error {

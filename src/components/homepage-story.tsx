@@ -20,9 +20,9 @@ import {
 import styles from "../../app/home.module.css";
 
 const storySteps = [
-  { number: "01", shortLabel: "读懂目标", title: "先找到岗位真正需要什么" },
-  { number: "02", shortLabel: "说清经历", title: "再把真实经历写得更有说服力" },
-  { number: "03", shortLabel: "完成交付", title: "最后得到一份可直接投递的简历" },
+  { number: "01", shortLabel: "读懂目标", title: "先找到这次机会看重什么" },
+  { number: "02", shortLabel: "说清经历", title: "有事实依据，表达才更有说服力" },
+  { number: "03", shortLabel: "完成交付", title: "确认每一处修改，再带着材料出发" },
 ] as const;
 
 function TargetPanel() {
@@ -59,11 +59,11 @@ function RewritePanel() {
     <div className={styles.rewriteVisual}>
       <div className={styles.beforeCard}>
         <div className={styles.miniHeading}><span>原始经历</span><small>你的真实材料</small></div>
-        <p>负责用户反馈收集，和团队一起优化了新手引导流程。</p>
+        <p>收集了 120+ 条用户反馈，和产品、研发改了 3 轮新手引导，关键步骤完成率提升 21%。</p>
       </div>
 
       <div className={styles.rewriteConnector} aria-hidden="true">
-        <span><WandSparkles size={16} /></span><i /><small>AI 正在梳理证据与表达</small>
+        <span><WandSparkles size={16} /></span><i /><small>依据已提供的事实，重新组织表达</small>
       </div>
 
       <div className={styles.afterCard}>
@@ -71,7 +71,7 @@ function RewritePanel() {
           <span><Sparkles size={15} /> 优化后</span><small>待你确认</small>
         </div>
         <p>
-          基于 <mark>120+ 条用户反馈</mark>定位新手引导断点，协同产品与研发完成 3 轮迭代，使关键步骤完成率提升 <mark>21%</mark>。
+          收集并整理 <mark>120+ 条用户反馈</mark>，协同产品与研发完成 3 轮新手引导迭代，关键步骤完成率提升 <mark>21%</mark>。
         </p>
         <div className={styles.evidenceTags}>
           <span><Check size={13} /> 问题</span>
@@ -82,7 +82,7 @@ function RewritePanel() {
 
       <div className={styles.safetyNote}>
         <ShieldCheck size={17} />
-        <span><strong>事实保护</strong> 缺少数字时先追问，不替你编造。</span>
+        <span><strong>来源可追溯</strong> 数字与成果来自原始材料，仍需本人核对。</span>
       </div>
     </div>
   );
@@ -169,8 +169,8 @@ export function HomepageStory() {
       <div className={styles.storyGlow} aria-hidden="true" />
 
       <div className={styles.storyHeader}>
-        <div><span className={styles.liveDot} aria-hidden="true" /><span>一份简历的完成过程</span></div>
-        <span>由你全程确认</span>
+        <div><span className={styles.liveDot} aria-hidden="true" /><span>从目标到材料 · 示例</span></div>
+        <span>示例数据</span>
       </div>
 
       <div className={styles.storyTabs} role="group" aria-label="能力演示步骤">

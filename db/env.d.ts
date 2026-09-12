@@ -1,6 +1,14 @@
 declare namespace Cloudflare {
   interface Env {
     DB: D1Database;
+    CODEX_AGENT_ENABLED?: string;
+    CODEX_RUNNER_SECRET?: string;
+    CODEX_MODEL?: string;
+    CODEX_JOB_BUDGET_MICROS?: string;
+    CODEX_DAILY_BUDGET_MICROS?: string;
+    CODEX_MAX_JOBS_PER_DAY?: string;
+    CODEX_MAX_MODEL_CALLS?: string;
+    CODEX_MAX_OUTPUT_TOKENS?: string;
     APP_ENV?: string;
     AUTH_DEV_CAPTURE?: string;
     DEEPSEEK_API_KEY?: string;

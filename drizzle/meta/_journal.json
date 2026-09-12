@@ -92,6 +92,20 @@
       "when": 1788253200000,
       "tag": "0012_metered_jianji_points",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1789228800000,
+      "tag": "0013_codex_agent_jobs",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1789229100000,
+      "tag": "0014_codex_cost_provenance",
+      "breakpoints": true
     }
   ]
 }

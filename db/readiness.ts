@@ -29,9 +29,13 @@ export const REQUIRED_DATABASE_TABLES = [
   "model_consent_events",
   "model_provider_state",
   "audit_events",
+  "agent_jobs",
+  "agent_job_runs",
+  "agent_budget_ledger",
+  "agent_runtime_state",
 ] as const;
 
-export const CURRENT_SCHEMA_VERSION = 12;
+export const CURRENT_SCHEMA_VERSION = 14;
 
 const requiredTableList = REQUIRED_DATABASE_TABLES.map((name) => `'${name}'`).join(", ");
 

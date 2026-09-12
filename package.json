@@ -17,6 +17,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:runner": "node --test services/codex-runner/test/*.test.mjs",
+    "test:agent-ui": "node scripts/verify-agent-workspace.mjs",
     "verify": "npm run typecheck && npm run lint && npm test && npm run build && node scripts/verify-production-artifact.mjs",
     "verify:release": "npm run db:migrate:local && npm run db:verify && npm run verify"
   },

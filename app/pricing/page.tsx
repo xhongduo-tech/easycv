@@ -59,6 +59,7 @@ export default function PricingPage() {
             <Faq question="免费赠送多少点？">访客态赠送 {GUEST_AI_TRIALS} 简迹点且不结转；注册并验证登录身份后，账户固定另获 {SIGNUP_AI_CREDITS} 简迹点。同一身份 730 天内只能领取一次；免费编辑、基础分析与导出不消耗简迹点。</Faq>
             <Faq question="点数会自动续费吗？">不会。所有点数包都是一次性购买，不绑定订阅。付费点数自到账起 12 个月有效，页面会明确显示到期日。</Faq>
             <Faq question="发送前为什么显示一个上限？">模型输出长度无法事先精确知道。系统先冻结按当前内容计算的最高点数，完成后按实际 Token 结算并退回差额；绝不会超过发送前确认的上限。</Faq>
+            <Faq question="Codex 材料任务也消耗简迹点吗？">目前为限额试点，开启后不扣简迹点，每日可创建的任务数以工作台显示为准。这里的 Token 折点规则适用于 DeepSeek 章节优化。后续如调整收费，会在启动任务前说明。</Faq>
             <Faq question="现在可以付款吗？">套餐与计费规则已经锁定，免费赠点已开放。支付通道需完成商户与回调配置后才会开放；当前不会收款，也不会制造虚假的购买成功状态。</Faq>
           </div>
           <div className={styles.trustNote}><ShieldCheck size={18} /><span><strong>隐私规则不因付费改变。</strong> 只有你主动启用增强优化时，经过脱敏的必要内容才会发送给 DeepSeek。</span><Link href="/privacy">查看隐私与 AI 说明</Link></div>

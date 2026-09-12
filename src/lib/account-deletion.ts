@@ -50,6 +50,12 @@ export async function deleteApplicationData(
       db.prepare("DELETE FROM model_consent_events WHERE user_id = ?").bind(userId),
       db.prepare("DELETE FROM legal_acceptances WHERE user_id = ?").bind(userId),
       db.prepare("DELETE FROM model_advice_deliveries WHERE user_id = ?").bind(userId),
+      // Job input/results and execution runs cascade from resumes/users.
+      // Preserve platform reservations after that deletion, with no surviving
+      // account identifier and no shared replacement identifier across rows.
+      db.prepare(`UPDATE agent_budget_ledger
+        SET user_id = 'deleted-agent-budget-' || lower(hex(randomblob(16)))
+        WHERE user_id = ?`).bind(userId),
       db.prepare("DELETE FROM ai_credit_ledger WHERE user_id = ?").bind(userId),
       db.prepare("DELETE FROM ai_credit_lots WHERE user_id = ?").bind(userId),
       db.prepare(`UPDATE signup_promo_redemptions

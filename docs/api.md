@@ -90,6 +90,8 @@
 
 ## 建议
 
+目标材料准备使用新的 `/api/agent-jobs` 异步流程，完整请求体、租约接口和状态定义见 [Codex 任务运行手册](codex-agent-operations.md#接口)。下面的 `/api/recommendations` 继续服务独立的章节检查与 DeepSeek 优化，其确定性改写和点数规则不用于 Codex 任务。
+
 - `POST /api/recommendations`
 
 ```json

@@ -140,6 +140,43 @@ export interface AdminOverview {
   recentResumes: AdminResumeSummary[];
   trackBreakdown: Array<{ label: string; value: number }>;
   statusBreakdown: Array<{ label: string; value: number }>;
+  agentMetrics: AdminAgentMetrics;
+}
+
+export interface AdminAgentMetrics {
+  generatedAt: string;
+  sinceSevenDays: string;
+  sinceTwentyFourHours: string;
+  statusCounts: Array<{ status: string; count: number }>;
+  sevenDays: {
+    createdJobs: number;
+    deliveredJobs: number;
+    appliedJobs: number;
+    closedJobs: number;
+    successRate: number | null;
+    applicationRate: number | null;
+  };
+  usage24h: {
+    currency: "USD";
+    retainedReservedUsdMicros: number;
+    platformCapUsdMicros: number;
+    returnedEstimatedCostUsdMicros: number;
+    returnedRuns: number;
+    conservativeReportedCostUsdMicros: number;
+    conservativeRuns: number;
+    unknownRuns: number;
+    unsettledRuns: number;
+  };
+  runtime: {
+    switchEnabled: boolean;
+    configurationReady: boolean;
+    acceptingJobs: boolean;
+    runnerOnline: boolean;
+    lastHeartbeatAt: string | null;
+    model: string;
+    runnerModel: string | null;
+    maxJobsPerDay: number;
+  };
 }
 
 export interface AdminResumeSummary {

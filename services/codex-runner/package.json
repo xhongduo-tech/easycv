@@ -1,0 +1,10 @@
+{
+  "name": "@jianji/codex-runner",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24" },
+  "packageManager": "pnpm@11.19.0",
+  "scripts": { "start": "node src/index.mjs", "test": "node --test test/*.test.mjs" },
+  "dependencies": { "@openai/codex-sdk": "0.154.0" }
+}

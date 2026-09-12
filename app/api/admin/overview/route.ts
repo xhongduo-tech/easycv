@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
+import { env } from "cloudflare:workers";
 import { ensureDatabase, getDatabase } from "@/../db";
 import { requireAdminSession } from "@/lib/admin-auth";
 import { withApiError } from "@/lib/api";
+import { getAgentMetrics } from "@/lib/agent-metrics";
 
 interface RecentRow {
   id: string;
@@ -22,7 +24,7 @@ export async function GET(request: Request) {
     const db = getDatabase();
     const dayStart = new Date(Math.floor(Date.now() / 86_400_000) * 86_400_000).toISOString();
     const now = new Date().toISOString();
-    const [ownedMetric, templateMetric, targetMetric, modelMetric, creditMetric, recent, tracks, statuses] = await Promise.all([
+    const [ownedMetric, templateMetric, targetMetric, modelMetric, creditMetric, recent, tracks, statuses, agentMetrics] = await Promise.all([
       db
         .prepare(
           "SELECT COUNT(*) AS total, COALESCE(ROUND(AVG(progress)), 0) AS average FROM resumes WHERE deleted_at IS NULL",
@@ -49,6 +51,7 @@ export async function GET(request: Request) {
       db
         .prepare("SELECT status AS label, COUNT(*) AS value FROM resumes WHERE deleted_at IS NULL GROUP BY status")
         .all<{ label: string; value: number }>(),
+      getAgentMetrics(db, env as unknown as Record<string, unknown>, new Date(now)),
     ]);
     const response = NextResponse.json({
       metrics: {
@@ -71,6 +74,7 @@ export async function GET(request: Request) {
       })),
       trackBreakdown: tracks.results,
       statusBreakdown: statuses.results,
+      agentMetrics,
       currentAdmin: { role, mode: "authenticated-admin" },
     });
     response.headers.set("cache-control", "private, no-store");

@@ -79,6 +79,7 @@ import type {
 } from "@/types/resume";
 import styles from "./builder.module.css";
 import { ImportDialog } from "./import-dialog";
+import { AgentWorkspace } from "./agent-workspace";
 
 type SectionId = "basics" | "summary" | "education" | "experience" | "projects" | "extras";
 type SaveState = "idle" | "saving" | "saved" | "error";
@@ -153,6 +154,10 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
   const [importOpen, setImportOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(initialExport);
   const [briefOpen, setBriefOpen] = useState(false);
+  const [agentApplying, setAgentApplying] = useState(false);
+  const [agentUndo, setAgentUndo] = useState<{ content: ResumeContent; revision: number } | null>(null);
+  const agentApplyingRef = useRef(false);
+  const agentBeforeApply = useRef<ResumeRecord | null>(null);
   const changeSequence = useRef(0);
   const saving = useRef(false);
   const resumeRef = useRef<ResumeRecord | null>(null);
@@ -234,7 +239,7 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
   }, [loadResume]);
 
   const saveResume = useCallback(async (confirmConflict = false) => {
-    if (!resume || !dirty || saving.current || (saveConflict && !confirmConflict)) return;
+    if (!resume || !dirty || saving.current || agentApplyingRef.current || (saveConflict && !confirmConflict)) return;
     saving.current = true;
     const sequence = changeSequence.current;
     setSaveState("saving");
@@ -363,12 +368,41 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
   }, []);
 
   const updateResume = useCallback((updater: (current: ResumeRecord) => ResumeRecord) => {
+    if (agentApplyingRef.current) return;
     invalidateAdvice();
+    setAgentUndo(null);
     changeSequence.current += 1;
     setResume((current) => (current ? updater(current) : current));
     setDirty(true);
     setSaveState("idle");
   }, [invalidateAdvice]);
+
+  const handleAgentApplying = useCallback((applying: boolean) => {
+    agentApplyingRef.current = applying;
+    setAgentApplying(applying);
+    if (applying) agentBeforeApply.current = resumeRef.current;
+  }, []);
+
+  const handleAgentApplied = useCallback((updated: ResumeRecord) => {
+    const previous = agentBeforeApply.current;
+    invalidateAdvice();
+    changeSequence.current += 1;
+    resumeRef.current = updated;
+    dirtyRef.current = false;
+    setResume(updated);
+    setDirty(false);
+    setSaveConflict(false);
+    setSaveMessage("");
+    setSaveState("saved");
+    setAgentUndo(previous && previous.revision + 1 === updated.revision
+      ? { content: previous.content, revision: updated.revision } : null);
+  }, [invalidateAdvice]);
+
+  function undoAgentChanges() {
+    if (!agentUndo || !resume || dirty || saving.current || agentApplyingRef.current || resume.revision !== agentUndo.revision) return;
+    const previous = agentUndo.content;
+    updateContent(() => previous);
+  }
 
   const updateContent = useCallback(
     (updater: (content: ResumeContent) => ResumeContent) => {
@@ -537,6 +571,8 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
   }
 
   function applyProposal(proposal: RewriteProposal) {
+    if (agentApplyingRef.current) return;
+    setAgentUndo(null);
     if (!resume || appliedProposalIds.includes(proposal.id)) return;
     if (advice?.baseBriefRevision !== undefined && advice.baseBriefRevision !== (resume.targetBrief?.revision ?? 0)) {
       setAdviceError("岗位要求已更新，请重新生成这条改写。");
@@ -561,6 +597,7 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
   }
 
   function undoRewrite() {
+    if (agentApplyingRef.current) return;
     if (!rewriteUndo || !resume) return;
     const restored = replaceTextAtSourceRef(
       resume.content,
@@ -614,7 +651,7 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
 
   return (
     <main className={styles.builderPage}>
-      <header className={styles.builderHeader}>
+      <header className={styles.builderHeader} inert={agentApplying}>
         <div className={styles.headerLeft}>
           <button ref={sidebarTriggerRef} className={styles.iconButton} type="button" onClick={() => setSidebarOpen(true)} aria-label="打开章节导航" aria-expanded={sidebarOpen} aria-controls="builder-sections"><Menu size={19} /></button>
           <Brand compact />
@@ -669,7 +706,7 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
               <div><span>当前专业版式</span><strong>{template.familyLabel ?? template.name}</strong><p>{template.rationale ?? template.description}</p></div>
             </div>
           )}
-          <div className={styles.mobileDocumentSettings}>
+          <div className={styles.mobileDocumentSettings} inert={agentApplying}>
             <label><span>简历名称</span><input value={resume.title} onChange={(event) => updateResume((current) => ({ ...current, title: event.target.value }))} /></label>
             <label><span>模板</span><select value={resume.templateId} onChange={(event) => updateResume((current) => ({ ...current, templateId: event.target.value }))}>{templates.map((item) => <option value={item.id} key={item.id}>{item.name}{item.familyLabel ? ` · ${item.familyLabel}` : ""}</option>)}</select></label>
           </div>
@@ -698,7 +735,7 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
           </div>
         </aside>
 
-        <section ref={editorPanelRef} id="builder-edit" role="tabpanel" aria-labelledby="builder-tab-edit" className={`${styles.editorPanel} ${mobileView !== "edit" ? styles.mobileHidden : ""}`}>
+        <section ref={editorPanelRef} id="builder-edit" role="tabpanel" aria-labelledby="builder-tab-edit" inert={agentApplying} className={`${styles.editorPanel} ${mobileView !== "edit" ? styles.mobileHidden : ""}`}>
           <div className={styles.editorHeading}>
             <div>
               <span>{String(sections.findIndex((item) => item.id === activeSection) + 1).padStart(2, "0")}</span>
@@ -772,6 +809,15 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
         </section>
 
         <aside id="builder-advice" role="tabpanel" aria-labelledby="builder-tab-advice" className={`${styles.advicePanel} ${mobileView !== "advice" ? styles.mobileHidden : ""}`}>
+          <button ref={resume.track === "study" ? briefTriggerRef : undefined} className="button button-secondary" type="button" disabled={agentApplying} onClick={() => setBriefOpen(true)}><Target size={16} /> {resume.targetBrief ? "编辑目标要求" : "添加目标要求"}</button>
+          <AgentWorkspace key={resume.id} resume={resume}
+            saveStatus={saveState === "error" || saveConflict ? "error" : saveState === "saving" ? "saving" : dirty || briefOpen || importOpen ? "pending" : "saved"}
+            onApplied={handleAgentApplied} onApplying={handleAgentApplying} />
+          {agentUndo && !dirty && resume.revision === agentUndo.revision && (
+            <div className={styles.undoBanner} role="status"><span>所选修改已保存为修订 {resume.revision}。</span><button type="button" disabled={agentApplying} onClick={undoAgentChanges}>撤销本次修改</button></div>
+          )}
+          <details className={styles.legacyAdvice} inert={agentApplying} open={adviceLoading || Boolean(advice) || Boolean(adviceError)}>
+            <summary>当前章节检查与 DeepSeek 优化</summary>
           <div className={styles.adviceHeader}>
             <div><Sparkles size={17} /><span>{usingModel ? "AI 简历助手" : "简历助手"}</span></div>
             <span className={styles.offlineTag}>{modelAvailable ? `简迹点 ${creditBalance}` : "基础模式"}</span>
@@ -879,6 +925,7 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
             </div>
           )}
           {adviceError && <p className={styles.adviceError} role="alert">{adviceError}</p>}
+          </details>
         </aside>
       </div>
       <div data-print-resume className={styles.printOnly} aria-hidden="true">
@@ -1127,8 +1174,8 @@ function TargetBriefDialog({
   }, [onClose, returnFocusRef]);
 
   async function saveBrief() {
-    if (!focusName.trim()) return setError("请填写目标岗位");
-    if (requirementsTooLarge) return setError("岗位文字超过 30 KB，请精简后再保存。建议只保留职责、任职要求和优先条件。");
+    if (!focusName.trim()) return setError("请填写目标岗位、项目或申请方向");
+    if (requirementsTooLarge) return setError("要求文字超过 30 KB，请精简后再保存。建议只保留职责、任职要求和优先条件。");
     savingRef.current = true;
     setSaving(true);
     setError("");
@@ -1157,7 +1204,7 @@ function TargetBriefDialog({
         window.requestAnimationFrame(() => saveButtonRef.current?.focus());
         return;
       }
-      if (!response.ok || !result.targetBrief) throw new Error(result.error?.message ?? "岗位依据保存失败");
+      if (!response.ok || !result.targetBrief) throw new Error(result.error?.message ?? "目标依据保存失败");
       onSaved(result.targetBrief);
     } catch (reason) {
       setError((reason as Error).message);
@@ -1168,7 +1215,7 @@ function TargetBriefDialog({
 
   async function pasteRequirements() {
     if (!navigator.clipboard?.readText) {
-      setError("当前浏览器不支持读取剪贴板，请使用 Ctrl/Command + V 粘贴岗位文字。");
+      setError("当前浏览器不支持读取剪贴板，请使用 Ctrl/Command + V 粘贴要求文字。");
       return;
     }
     try {
@@ -1192,15 +1239,15 @@ function TargetBriefDialog({
       setRequirementsText(clipped);
       const wasClipped = text.length > characters;
       setError(wasClipped
-        ? "岗位文字较长，已按 12000 字符与 30 KB 上限保留前段内容，请检查任职要求是否完整。"
+        ? "要求文字较长，已按 12000 字符与 30 KB 上限保留前段内容，请检查任职要求是否完整。"
         : conflict ? conflictMessage : "");
     } catch {
-      setError("无法读取剪贴板，请直接在输入框中粘贴岗位文字。");
+      setError("无法读取剪贴板，请直接在输入框中粘贴要求文字。");
     }
   }
 
   async function clearBrief() {
-    if (!resume.targetBrief || !window.confirm("清除后，岗位名称、JD 和来源记录都将从这份简历中删除。继续吗？")) return;
+    if (!resume.targetBrief || !window.confirm("清除后，目标名称、要求 和来源记录都将从这份简历中删除。继续吗？")) return;
     savingRef.current = true;
     setSaving(true);
     setError("");
@@ -1215,9 +1262,9 @@ function TargetBriefDialog({
         if (response.status === 409 && typeof result.error?.details?.currentRevision === "number") {
           setExpectedRevision(result.error.details.currentRevision);
           setConflict(true);
-          throw new Error("岗位资料已在另一页面更新。当前输入仍保留；再次保存会覆盖更新版，再次清除会删除更新版，请明确确认后继续。");
+          throw new Error("目标资料已在另一页面更新。当前输入仍保留；再次保存会覆盖更新版，再次清除会删除更新版，请明确确认后继续。");
         }
-        throw new Error(result.error?.message ?? "岗位依据清除失败");
+        throw new Error(result.error?.message ?? "目标依据清除失败");
       }
       onCleared();
     } catch (reason) {
@@ -1231,8 +1278,8 @@ function TargetBriefDialog({
     <div className={styles.briefBackdrop} onMouseDown={(event) => { if (!savingRef.current && event.target === event.currentTarget) onClose(); }}>
       <div ref={dialogRef} className={styles.briefDialog} role="dialog" aria-modal="true" aria-labelledby="brief-dialog-title">
         <div className={styles.briefDialogHeader}>
-          <div><span><ClipboardList size={18} /></span><div><small>{resume.targetName} · 以你确认的文字为准</small><h2 id="brief-dialog-title">添加目标岗位要求</h2></div></div>
-          <button ref={closeRef} type="button" disabled={saving} onClick={onClose} aria-label="关闭岗位依据"><X size={20} /></button>
+          <div><span><ClipboardList size={18} /></span><div><small>{resume.targetName} · 以你确认的文字为准</small><h2 id="brief-dialog-title">添加目标岗位、项目或申请方向要求</h2></div></div>
+          <button ref={closeRef} type="button" disabled={saving} onClick={onClose} aria-label="关闭目标依据"><X size={20} /></button>
         </div>
         <div className={styles.briefDialogBody}>
           <ul className={styles.jdInputMethods} aria-label="岗位要求提供方式">
@@ -1250,17 +1297,17 @@ function TargetBriefDialog({
               <div><strong>只有链接</strong><small>链接可记录出处，但不会被自动打开或抓取，仍需粘贴文字。</small></div>
             </li>
           </ul>
-          <label><span>目标岗位</span><input disabled={saving} value={focusName} onChange={(event) => setFocusName(event.target.value)} maxLength={160} placeholder="例如：后端开发工程师" /></label>
+          <label><span>目标岗位、项目或申请方向</span><input disabled={saving} value={focusName} onChange={(event) => setFocusName(event.target.value)} maxLength={160} placeholder="例如：后端工程师、研究项目或合作计划" /></label>
           <div className={styles.jdTextInput}>
             <div>
-              <label htmlFor="job-requirements">粘贴岗位职责和任职要求</label>
+              <label htmlFor="job-requirements">粘贴目标职责或申请要求</label>
               <span className={requirementsTooLarge ? styles.jdSizeExceeded : undefined}>{requirementsText.length} / 12000 字 · {(requirementBytes / 1_000).toFixed(1)} / 30 KB</span>
               <button type="button" disabled={saving} onClick={() => void pasteRequirements()}><ClipboardList size={14} /> 从剪贴板粘贴</button>
             </div>
-            <textarea id="job-requirements" disabled={saving} value={requirementsText} onChange={(event) => setRequirementsText(event.target.value)} maxLength={12000} rows={12} placeholder="粘贴这一个岗位的完整 JD，例如：岗位职责、任职要求、优先条件。系统只分析你在这里确认过的文字。" />
+            <textarea id="job-requirements" disabled={saving} value={requirementsText} onChange={(event) => setRequirementsText(event.target.value)} maxLength={12000} rows={12} placeholder="粘贴这个目标的完整要求，例如：岗位职责、申请条件、项目交付和优先条件。系统只分析你在这里确认过的文字。" />
             {requirementsTooLarge && <p className={styles.jdLimitError} role="alert">中文内容占用空间较多，当前已超过 30 KB。请精简重复介绍，保留岗位职责、任职要求和优先条件。</p>}
             <div className={styles.requirementPreview}>
-              <span role="status">{requirementsText.trim() ? `已识别 ${requirementPreview.length} 项要求` : "等待粘贴岗位文字"}</span>
+              <span role="status">{requirementsText.trim() ? `已识别 ${requirementPreview.length} 项要求` : "等待粘贴要求文字"}</span>
               {requirementPreview.length > 0 ? (
                 <ol>{requirementPreview.slice(0, 3).map((item) => <li key={item}>{item}</li>)}</ol>
               ) : (
@@ -1272,22 +1319,22 @@ function TargetBriefDialog({
           <details className={styles.briefSourceDetails} open={sourceDetailsOpen} onToggle={(event) => setSourceDetailsOpen(event.currentTarget.open)}>
             <summary><Link2 size={15} /> 补充来源记录（可选）</summary>
             <div className={styles.briefSourceGrid}>
-              <label><span>你从哪里看到这份 JD？</span><select disabled={saving} value={sourceType} onChange={(event) => setSourceType(event.target.value as TargetBriefSource)}>
+              <label><span>你从哪里看到这份要求？</span><select disabled={saving} value={sourceType} onChange={(event) => setSourceType(event.target.value as TargetBriefSource)}>
                 <option value="manual">我自行整理或收到文字</option>
-                <option value="employer-official">企业官方招聘页</option>
-                <option value="other-platform">招聘平台、内推、邮件或其他渠道</option>
+                <option value="employer-official">机构或企业官网</option>
+                <option value="other-platform">平台、推荐、邮件或其他渠道</option>
               </select></label>
               <label><span>原始链接（只记录，不读取）</span><input disabled={saving} value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} inputMode="url" placeholder="https://…" /></label>
             </div>
           </details>
-          <div className={styles.briefPrivacy}><ShieldCheck size={17} /><p>简历分析只使用你在输入框中确认的文字。岗位文本不进入公共岗位库，也不会被本平台用于训练；链接只保存供你核对，服务端不会访问。</p></div>
+          <div className={styles.briefPrivacy}><ShieldCheck size={17} /><p>简历分析只使用你在输入框中确认的文字。目标文本不进入公共岗位库，也不会被本平台用于训练；链接只保存供你核对，服务端不会访问。</p></div>
           {error && <p className={styles.briefError} role="alert">{error}</p>}
         </div>
         <div className={styles.briefDialogFooter}>
-          <span>{requirementsText.trim() ? "保存后将用这些要求生成证据地图；缺少证据时只会追问，不会编造。" : "可以先只保存岗位名称，之后再补充岗位文字。"}</span>
+          <span>{requirementsText.trim() ? "保存后可按这些要求启动材料任务；候选仍需你核对。" : "可以先只保存目标名称，之后再补充要求文字。"}</span>
           <div>
-            {resume.targetBrief && <button className={styles.clearBrief} type="button" disabled={saving} onClick={() => void clearBrief()}><Trash2 size={14} /> 清除岗位资料</button>}
-            <button ref={saveButtonRef} className="button button-primary" type="button" disabled={saving || !focusName.trim() || requirementsTooLarge} onClick={() => void saveBrief()}>{saving ? <><LoaderCircle className={styles.spin} size={16} /> 保存中</> : <>{conflict ? "确认覆盖" : requirementsText.trim() ? "确认并生成证据地图" : "保存岗位"} <Sparkles size={16} /></>}</button>
+            {resume.targetBrief && <button className={styles.clearBrief} type="button" disabled={saving} onClick={() => void clearBrief()}><Trash2 size={14} /> 清除目标资料</button>}
+            <button ref={saveButtonRef} className="button button-primary" type="button" disabled={saving || !focusName.trim() || requirementsTooLarge} onClick={() => void saveBrief()}>{saving ? <><LoaderCircle className={styles.spin} size={16} /> 保存中</> : <>{conflict ? "确认覆盖" : requirementsText.trim() ? "确认并保存要求" : "保存目标"} <Sparkles size={16} /></>}</button>
           </div>
         </div>
       </div>
