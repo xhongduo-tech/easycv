@@ -1,0 +1,20 @@
+.readingTrack {
+  position: fixed;
+  z-index: 51;
+  top: calc(var(--header-height) - 1px);
+  right: 0;
+  left: 0;
+  height: 2px;
+  pointer-events: none;
+}
+
+.readingProgress {
+  height: 100%;
+  background: #739779;
+  transform: scaleX(0);
+  transform-origin: left center;
+}
+
+@media print {
+  .readingTrack { display: none; }
+}

@@ -29,6 +29,8 @@
   letter-spacing: -.025em;
 }
 
+.heading h2 span { display: inline-block; }
+
 .intro {
   flex: none;
   margin: 0 0 4px;
@@ -37,7 +39,57 @@
   line-height: 1.9;
 }
 
-.mobileHint { display: none; }
+.galleryFrame { min-width: 0; }
+
+.galleryControls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+}
+
+.galleryControls[hidden] { display: none; }
+
+.galleryGuide p {
+  margin: 0 0 7px;
+  color: var(--muted);
+  font-size: .75rem;
+  line-height: 1.6;
+}
+
+.galleryPosition {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--ink-soft);
+  font-size: .8125rem;
+}
+
+.galleryCount {
+  color: var(--brand);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .05em;
+}
+
+.galleryArrows { display: flex; flex: none; gap: 6px; }
+
+.galleryArrows button {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 1px solid #cdd7c5;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--brand);
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+
+.galleryArrows button:disabled { color: #a8b3a1; border-color: #dce3d6; cursor: default; }
+.galleryArrows button:not(:disabled):hover { border-color: var(--brand); background: #e4ebde; }
+.galleryArrows button:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
 
 .gallery {
   display: grid;
@@ -61,6 +113,7 @@
   position: relative;
   container-type: inline-size;
   transform: rotate(-1deg);
+  transition: transform 260ms ease;
 }
 
 .paperStack::before {
@@ -74,6 +127,12 @@
 
 .example:nth-child(2) .paperStack { transform: rotate(.8deg); }
 .example:nth-child(3) .paperStack { transform: rotate(-.4deg); }
+
+@media (hover: hover) and (pointer: fine) {
+  .example:hover .paperStack { transform: translateY(-5px) rotate(0deg); }
+}
+
+.gallery:focus-within .paperStack { transform: translateY(-5px) rotate(0deg); }
 
 .paper.paper {
   position: relative;
@@ -170,10 +229,9 @@
   .eyebrow { margin-bottom: 15px; font-size: .75rem; }
   .heading h2 { font-size: clamp(1.75rem, 5.3vw, 2.2rem); }
   .intro { font-size: .875rem; }
-  .mobileHint { display: flex; align-items: center; gap: 10px; margin: 0 0 9px; color: var(--muted); font-size: .75rem; }
   .gallery {
     grid-template-columns: none;
-    grid-auto-columns: min(92%, 380px);
+    grid-auto-columns: min(92%, 440px);
     grid-auto-flow: column;
     gap: 26px;
     overflow-x: auto;
@@ -197,4 +255,15 @@
 
 @media (max-width: 380px) {
   .gallery { grid-auto-columns: 92%; gap: 22px; }
+  .galleryGuide p { max-width: 175px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .paperStack { transition: none; }
+  .example:hover .paperStack,
+  .gallery:focus-within .paperStack { transform: rotate(-1deg); }
+  .example:nth-child(2):hover .paperStack,
+  .gallery:focus-within .example:nth-child(2) .paperStack { transform: rotate(.8deg); }
+  .example:nth-child(3):hover .paperStack,
+  .gallery:focus-within .example:nth-child(3) .paperStack { transform: rotate(-.4deg); }
 }

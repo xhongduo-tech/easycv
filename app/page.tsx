@@ -4,6 +4,7 @@ import { ArrowDown, ArrowRight, ArrowUpRight, Check, FilePlus2, FileText, FilePe
 import { HomepageStory } from "@/components/homepage-story";
 import { HomepageOpportunities } from "@/components/homepage-opportunities";
 import { HomepageTemplates } from "@/components/homepage-templates";
+import { HomepageExperience } from "@/components/homepage-experience";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import styles from "./home.module.css";
@@ -22,7 +23,7 @@ const outputs = [
 
 export default function HomePage() {
   return (
-    <main className={styles.home}>
+    <HomepageExperience className={styles.home}>
       <SiteHeader minimal />
 
       <section className={styles.hero} aria-labelledby="home-title">
@@ -44,7 +45,7 @@ export default function HomePage() {
               </Link>
             </div>
             <p className={styles.startNote}><Check size={14} aria-hidden="true" /> 免费创建与编辑 · 导出无水印</p>
-            <a className={styles.exploreLink} href="#how-it-works">看看材料如何变清晰 <ArrowDown size={15} aria-hidden="true" /></a>
+            <a className={styles.exploreLink} href="#opportunities">选一个用途，看看怎么开始 <ArrowDown size={15} aria-hidden="true" /></a>
           </div>
 
           <HomepageStory />
@@ -62,14 +63,14 @@ export default function HomePage() {
       <HomepageOpportunities />
 
       <section className={`shell ${styles.workflow}`} id="how-it-works" aria-labelledby="workflow-title">
-        <div className={styles.sectionHeading}>
+        <div className={styles.sectionHeading} data-reveal>
           <p className={styles.sectionKicker}>从经历，到表达 / THE DETAILS MATTER</p>
           <h2 id="workflow-title">好表达的背后，<br />是说得清的经历。</h2>
           <p>先整理已有事实，再补齐关键细节。<br />最后由你核对来源，决定保留哪些修改。</p>
         </div>
         <figure className={styles.evidenceExample}>
           <ol className={styles.evidenceFlow}>
-            <li>
+            <li data-reveal>
               <div className={styles.exampleStep}><span>01</span><h3>从一句原话开始</h3></div>
               <div className={styles.originalNote}>
                 <span>你已有的经历</span>
@@ -77,7 +78,7 @@ export default function HomePage() {
                 <p>先把做过的事写下来，<br />不必一开始就想好怎么措辞。</p>
               </div>
             </li>
-            <li>
+            <li data-reveal data-reveal-delay="70">
               <div className={styles.exampleStep}><span>02</span><h3>把你的贡献说具体</h3></div>
               <div className={styles.questionNote}>
                 <span>一个值得补充的问题</span>
@@ -85,7 +86,7 @@ export default function HomePage() {
                 <div className={styles.exampleAnswer}><small>你补充的细节</small><p>“我独立实现了权限配置模块，目前供 3 个业务组使用。”</p></div>
               </div>
             </li>
-            <li>
+            <li data-reveal data-reveal-delay="140">
               <div className={styles.exampleStep}><span>03</span><h3>留下一段有依据的表达</h3></div>
               <div className={styles.resultNote}>
                 <span>等待你审阅的候选</span>
@@ -102,25 +103,25 @@ export default function HomePage() {
       <HomepageTemplates />
 
       <section className={`shell ${styles.deliverables}`} aria-labelledby="output-title">
-        <div className={styles.sectionHeading}>
+        <div className={styles.sectionHeading} data-reveal>
           <p className={styles.sectionKicker}>准备好，然后出发 / READY TO GO</p>
           <h2 id="output-title">写好之后，<br />去你需要的地方。</h2>
           <p>同一份内容，按使用场景选择输出。<br />从正式投递，到继续编辑与留存。</p>
         </div>
         <div className={styles.outputGrid}>
-          {outputs.map(({ icon: Icon, format, title, text }) => <article key={format}>
+          {outputs.map(({ icon: Icon, format, title, text }, index) => <article key={format} data-reveal data-reveal-delay={index * 45}>
             <div><Icon size={24} strokeWidth={1.5} aria-hidden="true" /><span>{format}</span></div>
             <h3>{title}</h3><p>{text}</p>
           </article>)}
         </div>
-        <div className={styles.freeNote}>
+        <div className={styles.freeNote} data-reveal>
           <p><ShieldCheck size={20} aria-hidden="true" /><span>从第一份简历开始，就可以免费编辑与导出。</span></p>
           <Link href="/pricing">了解免费范围与增强功能 <ArrowUpRight size={15} aria-hidden="true" /></Link>
         </div>
       </section>
 
       <section className={styles.questions} id="questions" aria-labelledby="questions-title">
-        <div className={`shell ${styles.questionsGrid}`}>
+        <div className={`shell ${styles.questionsGrid}`} data-reveal>
           <div className={styles.questionsIntro}>
             <p className={styles.sectionKicker}>开始前，你可能想知道</p>
             <h2 id="questions-title">把疑问留在这里，<br />带着想法开始。</h2>
@@ -138,19 +139,19 @@ export default function HomePage() {
       </section>
 
       <section className={`shell ${styles.closing}`} aria-labelledby="closing-title">
-        <div>
+        <div data-reveal>
           <p className={styles.sectionKicker}>YOUR NEXT CHAPTER</p>
           <h2 id="closing-title">好机会，<br />从一份好表达开始。</h2>
           <p className={styles.closingLead}>选一个具体目标，留下一份独立版本。<br />下一段经历，由你书写。</p>
           <Link className="button button-primary" href="/dashboard?new=1"><Plus size={18} aria-hidden="true" /> 创建第一份简历</Link>
         </div>
-        <div className={styles.closingArtwork} aria-hidden="true">
+        <div className={styles.closingArtwork} aria-hidden="true" data-reveal data-reveal-delay="100">
           <div className={styles.closingPaper}><FilePlus2 size={29} strokeWidth={1.3} /><span>你的名字</span><small>下一段经历，由你书写</small><i /><i /><i /><b /><i /><i /></div>
           <span>每个目标，都值得认真准备</span>
         </div>
       </section>
 
       <SiteFooter />
-    </main>
+    </HomepageExperience>
   );
 }

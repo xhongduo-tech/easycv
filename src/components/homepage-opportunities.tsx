@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, ArrowUpRight } from "lucide-react";
+import { ArrowDown, ArrowRight, ArrowUpRight } from "lucide-react";
 import styles from "./homepage-opportunities.module.css";
 
 const opportunities = [
   {
     label: "求职与转岗",
+    track: "career",
+    nextStep: "可以先准备一个目标岗位和一段相关经历，创建后再慢慢补充。",
     description: "让相关经历，先被看见。",
     document: "产品经理 · 求职简历",
     direction: "面向用户研究与产品体验方向",
@@ -19,6 +21,8 @@ const opportunities = [
   },
   {
     label: "学习与研究",
+    track: "study",
+    nextStep: "可以先想好申请方向，再挑一段最能说明兴趣的学习或研究经历。",
     description: "把兴趣，连接到做过的探索。",
     document: "人机交互 · 申请 CV",
     direction: "面向学习申请与研究机会",
@@ -30,6 +34,8 @@ const opportunities = [
   },
   {
     label: "自由职业与合作",
+    track: "career",
+    nextStep: "从一个做过的项目开始，写清你能提供的服务和交付内容。",
     description: "让合作方知道，你能带来什么。",
     document: "用户研究 · 合作介绍",
     direction: "面向项目委托与合作沟通",
@@ -41,6 +47,8 @@ const opportunities = [
   },
   {
     label: "整理长期经历",
+    track: null,
+    nextStep: "还没有具体目标也没关系，先记下一件最近完成的事。",
     description: "先记下来，再为下一次机会取舍。",
     document: "阶段经历 · 个人底稿",
     direction: "记录工作、项目与学习的积累",
@@ -54,10 +62,20 @@ const opportunities = [
 
 export function HomepageOpportunities() {
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const exampleHeadingRef = useRef<HTMLHeadingElement>(null);
   const selected = opportunities[selectedIndex];
+  const createHref = `/dashboard?new=1${selected.track ? `&track=${selected.track}` : ""}`;
+
+  function showExample() {
+    const heading = exampleHeadingRef.current;
+    if (!heading) return;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    heading.focus({ preventScroll: true });
+    heading.scrollIntoView({ behavior: reducedMotion ? "instant" : "smooth", block: "start" });
+  }
 
   return (
-    <section className={styles.section} id="opportunities" aria-labelledby="opportunities-title">
+    <section className={styles.section} id="opportunities" aria-labelledby="opportunities-title" data-reveal>
       <div className="shell">
         <div className={styles.heading}>
           <div>
@@ -66,6 +84,12 @@ export function HomepageOpportunities() {
           </div>
           <p className={styles.intro}>不用先给自己贴上标签。<br />从这次想做的事出发，找到适合的表达。</p>
         </div>
+
+        <ol className={styles.guideTrail} aria-label="从用途开始的准备步骤">
+          <li><span aria-hidden="true">01</span> 选用途</li>
+          <li><span aria-hidden="true">02</span> 看示例</li>
+          <li><span aria-hidden="true">03</span> 准备自己的材料</li>
+        </ol>
 
         <div className={styles.layout}>
           <div className={styles.choices}>
@@ -88,30 +112,48 @@ export function HomepageOpportunities() {
                 </button>
               ))}
             </div>
-            <Link className={styles.createLink} href="/dashboard?new=1">
-              为我的下一程做准备 <ArrowUpRight size={18} aria-hidden="true" />
-            </Link>
+            <div className={styles.nextStep}>
+              <p className={styles.nextStepTitle}>从这里开始 · {selected.label}</p>
+              <p className={styles.nextStepCopy}>{selected.nextStep}</p>
+              <div className={styles.nextStepActions}>
+                <button type="button" className={styles.viewExample} onClick={showExample} aria-controls="opportunity-example">
+                  查看所选示例 <ArrowDown size={16} aria-hidden="true" />
+                </button>
+                <Link className={styles.createLink} href={createHref}>
+                  {selected.track === "study" ? "准备我的申请材料" : selected.track === "career" ? "准备我的职业材料" : "开始记录我的经历"}
+                  <ArrowUpRight size={18} aria-hidden="true" />
+                </Link>
+              </div>
+            </div>
+            <p className={styles.srOnly} role="status" aria-live="polite" aria-atomic="true">
+              已选择{selected.label}，示例已更新。{selected.nextStep}
+            </p>
           </div>
 
-          <div className={styles.example} id="opportunity-example" aria-live="polite" aria-atomic="true">
-            <div className={styles.exampleLabel}><span>用途示例</span><span>0{selectedIndex + 1} / 04</span></div>
-            <div className={styles.paperStack}>
-              <article className={styles.paper} aria-label={selected.document}>
-                <header className={styles.paperHeader}>
-                  <p>{selected.document}</p>
-                  <h3>林予安</h3>
-                  <span>{selected.direction}</span>
-                </header>
-                {selected.sections.map((section) => (
-                  <section className={styles.paperSection} key={section.title}>
-                    <h4>{section.title}</h4>
-                    <p>{section.text}</p>
-                  </section>
-                ))}
-                <footer className={styles.paperFooter}>真实经历 · 按目标整理</footer>
-              </article>
+          <div className={styles.example} id="opportunity-example">
+            <div className={styles.exampleLabel}>
+              <h3 ref={exampleHeadingRef} tabIndex={-1}>{selected.label}示例</h3>
+              <span>0{selectedIndex + 1} / 04</span>
             </div>
-            <div className={styles.focus}><strong>准备重点</strong><p>{selected.focus}</p></div>
+            <div className={styles.exampleContent} key={selected.label}>
+              <div className={styles.paperStack}>
+                <article className={styles.paper} aria-label={selected.document}>
+                  <header className={styles.paperHeader}>
+                    <p>{selected.document}</p>
+                    <p className={styles.paperName}>林予安</p>
+                    <span>{selected.direction}</span>
+                  </header>
+                  {selected.sections.map((section) => (
+                    <section className={styles.paperSection} key={section.title}>
+                      <h4>{section.title}</h4>
+                      <p>{section.text}</p>
+                    </section>
+                  ))}
+                  <footer className={styles.paperFooter}>真实经历 · 按目标整理</footer>
+                </article>
+              </div>
+              <div className={styles.focus}><strong>准备重点</strong><p>{selected.focus}</p></div>
+            </div>
             <p className={styles.notice}>人物与内容均为虚构，仅用于说明材料的组织方式。</p>
           </div>
         </div>

@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { ArrowRight, ArrowUpRight } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import { ResumePreview } from "@/components/resume-preview";
+import { HomepageTemplateGallery } from "@/components/homepage-template-gallery";
 import { createStarterContent, templates } from "@/lib/sample-data";
 import styles from "./homepage-templates.module.css";
 
@@ -27,12 +28,12 @@ const featuredTemplates = [
 
 export function HomepageTemplates() {
   return (
-    <section className={styles.section} id="templates" aria-labelledby="templates-title">
+    <section className={styles.section} id="templates" aria-labelledby="templates-title" data-reveal>
       <div className="shell">
         <div className={styles.heading}>
           <div>
             <p className={styles.eyebrow}>落在纸上，也要恰到好处</p>
-            <h2 id="templates-title">好内容，值得一份好版式。</h2>
+            <h2 id="templates-title">好内容，<span>值得一份好版式。</span></h2>
           </div>
           <p className={styles.intro}>
             清楚、舒展，或是更紧凑。<br />
@@ -40,14 +41,7 @@ export function HomepageTemplates() {
           </p>
         </div>
 
-        <p className={styles.mobileHint}>向左滑动，比较三种版式 <ArrowRight size={15} aria-hidden="true" /></p>
-
-        <div
-          className={styles.gallery}
-          role="group"
-          aria-label="三种现有简历版式示例，可横向滚动查看"
-          tabIndex={0}
-        >
+        <HomepageTemplateGallery labels={featuredTemplates.map((featured) => featured.label)}>
           {featuredTemplates.map((featured, index) => {
             const template = templates.find((item) => item.id === featured.id);
             if (!template) return null;
@@ -75,7 +69,7 @@ export function HomepageTemplates() {
               </figure>
             );
           })}
-        </div>
+        </HomepageTemplateGallery>
 
         <div className={styles.footer}>
           <p>以上均为现有版式；人物与经历为示例内容。</p>

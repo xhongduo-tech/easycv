@@ -354,6 +354,7 @@
 .pageGuide > span { color: var(--muted); font-size: 12px; letter-spacing: .06em; }
 .pageGuide a { display: inline-flex; min-height: 36px; align-items: center; gap: 14px; color: var(--ink-soft); font-size: 13px; }
 .pageGuide a:hover { color: var(--brand); }
+.pageGuide a[aria-current="location"] { color: var(--brand); text-decoration: underline; text-underline-offset: 7px; text-decoration-thickness: 1px; }
 .pageGuide svg { color: #8c9e8c; }
 
 .evidenceExample { margin: 40px 0 0; }
@@ -546,4 +547,34 @@
   .workspaceLink { gap: 3px; font-size: .7rem; }
   .resumePaper { padding-inline: 18px; }
   .resumeSection h3 { gap: 7px; }
+}
+
+@keyframes softArrival {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes paperArrival {
+  from { opacity: 0; transform: translateY(18px) rotate(-2deg); }
+  to { opacity: 1; transform: translateY(0) rotate(0); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .heroKicker { animation: softArrival 480ms 30ms backwards; }
+  .heroCopy h1 { animation: softArrival 600ms 90ms backwards; }
+  .lead { animation: softArrival 600ms 160ms backwards; }
+  .heroActions, .startNote { animation: softArrival 600ms 230ms backwards; }
+  .hero .paperStack { animation: paperArrival 800ms 120ms cubic-bezier(.2,.65,.25,1) backwards; }
+  .hero .sourceNote { animation: softArrival 650ms 350ms backwards; }
+  .heroActions svg, .exploreLink svg, .pageGuide svg, .closing :global(.button) svg { transition: transform 180ms ease; }
+  .primaryAction:hover svg, .primaryAction:focus-visible svg { transform: translate(2px, -2px); }
+  .workspaceLink:hover svg, .workspaceLink:focus-visible svg { transform: translateX(3px); }
+  .exploreLink:hover svg, .exploreLink:focus-visible svg,
+  .pageGuide a:hover svg, .pageGuide a:focus-visible svg { transform: translateY(3px); }
+  .faqList details[open] > p { animation: softArrival 240ms ease-out backwards; }
+  .closing :global(.button):hover svg, .closing :global(.button):focus-visible svg { transform: rotate(90deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home :global(.button):hover { transform: none; }
 }
