@@ -1,10 +1,10 @@
 .page { min-height: 100vh; background: var(--paper); }
-.hero { padding: 76px 0 60px; border-bottom: 1px solid var(--border); background: radial-gradient(circle at 12% 20%, rgba(92, 62, 232, .11), transparent 30%), var(--canvas); }
+.hero { padding: 76px 0 60px; border-bottom: 1px solid var(--border); background: radial-gradient(circle at 12% 20%, rgba(33, 101, 83, .11), transparent 30%), var(--canvas); }
 .back { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 42px; color: var(--muted); font-size: .76rem; font-weight: 720; }
 .hero h1 { max-width: 820px; margin: 0; font-size: clamp(2.75rem, 6vw, 5.15rem); line-height: .98; letter-spacing: -.07em; }
 .hero h1 span { color: var(--brand); }
 .hero > div > p:not(:global(.eyebrow)) { max-width: 760px; margin: 22px 0 0; color: var(--muted); font-size: .98rem; line-height: 1.8; }
-.pending { display: inline-flex; align-items: center; gap: 8px; padding: 10px 13px; margin-top: 22px; border: 1px solid #d4cdf8; border-radius: 10px; color: var(--brand-dark); background: var(--brand-soft); font-size: .75rem; font-weight: 720; }
+.pending { display: inline-flex; align-items: center; gap: 8px; padding: 10px 13px; margin-top: 22px; border: 1px solid var(--border-strong); border-radius: 10px; color: var(--brand-dark); background: var(--brand-soft); font-size: .75rem; font-weight: 720; }
 .layout { display: grid; grid-template-columns: 210px minmax(0, 800px); gap: 72px; padding: 72px 0 116px; }
 .layout aside { position: sticky; top: 104px; align-self: start; display: grid; gap: 6px; }
 .layout aside a { padding: 8px 10px; border-radius: 8px; color: var(--muted); font-size: .75rem; }
@@ -20,7 +20,7 @@
 .principles svg { flex: none; margin-top: 2px; color: var(--success); }
 .principles span { color: var(--muted); font-size: .8rem; line-height: 1.65; }
 .principles strong { display: block; margin-bottom: 2px; color: var(--ink); }
-.formula { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 11px; padding: 17px; margin: 11px 0; border: 1px solid #d4cdf8; border-radius: 13px; background: var(--brand-soft); overflow: hidden; }
+.formula { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 11px; padding: 17px; margin: 11px 0; border: 1px solid var(--border-strong); border-radius: 13px; background: var(--brand-soft); overflow: hidden; }
 .formula svg { color: var(--brand); }
 .formula code { padding: 0; background: transparent; white-space: normal; overflow-wrap: anywhere; line-height: 1.65; }
 .note { padding: 13px 15px; border-left: 3px solid var(--brand); border-radius: 4px 10px 10px 4px; background: var(--surface-alt); }

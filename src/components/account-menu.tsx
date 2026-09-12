@@ -2,16 +2,23 @@
 /* eslint-disable @next/next/no-img-element -- OAuth avatar hosts are user/provider controlled and are not proxied by this Vinext app. */
 
 import Link from "next/link";
+import { useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { Coins, FileText, LogIn, LogOut, Settings, ShieldCheck, UserRound } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 
+const subscribeToHydration = () => () => {};
+const clientSnapshot = () => true;
+const serverSnapshot = () => false;
+
 export function AccountMenu({ compact = false, returnTo = "/dashboard" }: { compact?: boolean; returnTo?: string }) {
   const router = useRouter();
+  // A cached session may arrive before hydration; keep the first render identical to SSR.
+  const hydrated = useSyncExternalStore(subscribeToHydration, clientSnapshot, serverSnapshot);
   const session = authClient.useSession();
   const user = session.data?.user as (NonNullable<typeof session.data>["user"] & { role?: string }) | undefined;
 
-  if (session.isPending) return <span className="account-menu account-menu-loading" aria-label="正在读取登录状态"><span className="account-avatar" /></span>;
+  if (!hydrated || session.isPending) return <span className="account-menu account-menu-loading" aria-label="正在读取登录状态"><span className="account-avatar" /></span>;
   if (!user) {
     return <Link className={compact ? "account-login-compact" : "button button-ghost"} href={`/auth/login?returnTo=${encodeURIComponent(returnTo)}`} aria-label="登录账号"><LogIn size={17} /><span>{compact ? "" : "登录"}</span></Link>;
   }

@@ -2,9 +2,9 @@
 
 .explain { padding: 100px 0; background: var(--paper); }
 .explain header, .faq header { max-width: 720px; margin-bottom: 34px; }
-.explain h2, .freeDetails h2, .faq h2 { margin: 0; font-size: clamp(2.15rem, 4.5vw, 3.65rem); line-height: 1.05; letter-spacing: -.06em; }
+.explain h2, .freeDetails h2, .faq h2 { margin: 0; font-size: clamp(1.9rem, 3.4vw, 2.8rem); line-height: 1.32; letter-spacing: -.04em; text-wrap: balance; }
 .reasonGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-.reasonGrid article { padding: 27px; border: 1px solid var(--border); border-radius: 20px; background: white; box-shadow: var(--shadow-sm); }
+.reasonGrid article { padding: 27px; border: 1px solid var(--border); border-radius: 10px; background: white; box-shadow: var(--shadow-sm); }
 .reasonGrid article > span { display: grid; width: 45px; height: 45px; place-items: center; border-radius: 13px; color: var(--brand); background: var(--brand-soft); }
 .reasonGrid h3 { margin: 22px 0 10px; font-size: 1rem; }
 .reasonGrid p { margin: 0; color: var(--muted); font-size: .85rem; line-height: 1.72; }
@@ -27,7 +27,7 @@
 .faqGrid summary span { color: var(--brand); font-size: 1.25rem; transition: transform 180ms ease; }
 .faqGrid details[open] summary span { transform: rotate(45deg); }
 .faqGrid details p { padding: 0 19px 18px; margin: -2px 0 0; color: var(--muted); font-size: .82rem; line-height: 1.7; }
-.trustNote { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 17px 19px; margin-top: 20px; border: 1px solid #d4cdf8; border-radius: 14px; color: var(--brand); background: var(--brand-soft); }
+.trustNote { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 17px 19px; margin-top: 20px; border: 1px solid var(--border-strong); border-radius: 14px; color: var(--brand); background: var(--brand-soft); }
 .trustNote span { color: var(--ink-soft); font-size: .78rem; line-height: 1.55; }
 .trustNote a { font-size: .75rem; font-weight: 760; }
 

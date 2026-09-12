@@ -683,14 +683,17 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
         </div>
       </header>
 
-      <div className={styles.mobileTabs} role="tablist" aria-label="编辑器视图">
-        <button id="builder-tab-edit" type="button" role="tab" tabIndex={mobileView === "edit" ? 0 : -1} aria-selected={mobileView === "edit"} aria-controls="builder-edit" className={mobileView === "edit" ? styles.mobileTabActive : ""} onKeyDown={(event) => moveMobileTab(event, "edit")} onClick={() => setMobileView("edit")}><FileText size={16} /> 填写</button>
-        <button id="builder-tab-preview" type="button" role="tab" tabIndex={mobileView === "preview" ? 0 : -1} aria-selected={mobileView === "preview"} aria-controls="builder-preview" className={mobileView === "preview" ? styles.mobileTabActive : ""} onKeyDown={(event) => moveMobileTab(event, "preview")} onClick={() => setMobileView("preview")}><Eye size={16} /> 预览</button>
-        <button id="builder-tab-advice" type="button" role="tab" tabIndex={mobileView === "advice" ? 0 : -1} aria-selected={mobileView === "advice"} aria-controls="builder-advice" className={mobileView === "advice" ? styles.mobileTabActive : ""} onKeyDown={(event) => moveMobileTab(event, "advice")} onClick={() => setMobileView("advice")}><Sparkles size={16} /> 助手</button>
+      <div className={styles.workspaceBar}>
+        <div className={styles.mobileTabs} role="tablist" aria-label="编辑器视图">
+          <button id="builder-tab-edit" type="button" role="tab" tabIndex={mobileView === "edit" ? 0 : -1} aria-selected={mobileView === "edit"} aria-controls="builder-edit" className={mobileView === "edit" ? styles.mobileTabActive : ""} onKeyDown={(event) => moveMobileTab(event, "edit")} onClick={() => setMobileView("edit")}><FileText size={16} /> 编辑资料</button>
+          <button id="builder-tab-preview" type="button" role="tab" tabIndex={mobileView === "preview" ? 0 : -1} aria-selected={mobileView === "preview"} aria-controls="builder-preview" className={mobileView === "preview" ? styles.mobileTabActive : ""} onKeyDown={(event) => moveMobileTab(event, "preview")} onClick={() => setMobileView("preview")}><Eye size={16} /> 成品预览</button>
+          <button id="builder-tab-advice" type="button" role="tab" tabIndex={mobileView === "advice" ? 0 : -1} aria-selected={mobileView === "advice"} aria-controls="builder-advice" className={mobileView === "advice" ? styles.mobileTabActive : ""} onKeyDown={(event) => moveMobileTab(event, "advice")} onClick={() => setMobileView("advice")}><Sparkles size={16} /> 材料助手</button>
+        </div>
+        <button className={styles.workspaceTarget} type="button" disabled={agentApplying} onClick={() => setBriefOpen(true)}><Target size={15} /><span><small>目标要求</small><strong>{resume.targetBrief?.focusName || resume.targetName}</strong></span><ChevronDown size={14} /></button>
       </div>
 
       {sidebarOpen && <button className={styles.sidebarBackdrop} type="button" aria-label="关闭章节导航" onClick={() => setSidebarOpen(false)} />}
-      <div className={styles.builderLayout}>
+      <div className={styles.builderLayout} data-view={mobileView}>
         <aside ref={sidebarRef} id="builder-sections" className={`${styles.sectionSidebar} ${sidebarOpen ? styles.sidebarOpen : ""}`}>
           <div className={styles.sidebarHeader}>
             <span>简历结构</span>
@@ -719,7 +722,7 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
                   type="button"
                   key={section.id}
                   className={activeSection === section.id ? styles.activeSection : ""}
-                  onClick={() => { selectSection(section.id); setSidebarOpen(false); }}
+                  onClick={() => { selectSection(section.id); setMobileView("edit"); setSidebarOpen(false); }}
                 >
                   <span className={styles.sectionIndex}>{completed ? <Check size={12} /> : index + 1}</span>
                   <Icon size={17} />
@@ -741,7 +744,7 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
               <span>{String(sections.findIndex((item) => item.id === activeSection) + 1).padStart(2, "0")}</span>
               <div><h1 ref={editorHeadingRef} tabIndex={-1}>{sections.find((item) => item.id === activeSection)?.label}</h1><p>{sectionDescription(activeSection, resume.track)}</p></div>
             </div>
-            <button className="button button-ghost" type="button" onClick={() => void requestAdvice()} disabled={adviceLoading}>
+            <button className="button button-ghost" type="button" title={adviceButtonLabel} onClick={() => void requestAdvice()} disabled={adviceLoading}>
               {adviceLoading ? <LoaderCircle className={styles.spin} size={16} /> : <WandSparkles size={16} />} {adviceButtonLabel}
             </button>
           </div>
@@ -809,7 +812,10 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
         </section>
 
         <aside id="builder-advice" role="tabpanel" aria-labelledby="builder-tab-advice" className={`${styles.advicePanel} ${mobileView !== "advice" ? styles.mobileHidden : ""}`}>
-          <button ref={resume.track === "study" ? briefTriggerRef : undefined} className="button button-secondary" type="button" disabled={agentApplying} onClick={() => setBriefOpen(true)}><Target size={16} /> {resume.targetBrief ? "编辑目标要求" : "添加目标要求"}</button>
+          <div className={styles.adviceTarget}>
+            <div><span>本次准备的目标</span><strong>{resume.targetBrief?.focusName || resume.targetName}</strong><p>{resume.targetBrief?.requirementsText ? "根据已保存的目标要求与经历准备材料。" : "写下具体要求，让每一份材料都有明确方向。"}</p></div>
+            <button ref={resume.track === "study" ? briefTriggerRef : undefined} className="button button-secondary" type="button" disabled={agentApplying} onClick={() => setBriefOpen(true)}><Target size={16} /> {resume.targetBrief ? "编辑目标要求" : "添加目标要求"}</button>
+          </div>
           <AgentWorkspace key={resume.id} resume={resume}
             saveStatus={saveState === "error" || saveConflict ? "error" : saveState === "saving" ? "saving" : dirty || briefOpen || importOpen ? "pending" : "saved"}
             onApplied={handleAgentApplied} onApplying={handleAgentApplying} />
@@ -817,7 +823,7 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
             <div className={styles.undoBanner} role="status"><span>所选修改已保存为修订 {resume.revision}。</span><button type="button" disabled={agentApplying} onClick={undoAgentChanges}>撤销本次修改</button></div>
           )}
           <details className={styles.legacyAdvice} inert={agentApplying} open={adviceLoading || Boolean(advice) || Boolean(adviceError)}>
-            <summary>当前章节检查与 DeepSeek 优化</summary>
+            <summary>只检查当前章节 <span>快速检查与表达建议</span><ChevronDown size={15} /></summary>
           <div className={styles.adviceHeader}>
             <div><Sparkles size={17} /><span>{usingModel ? "AI 简历助手" : "简历助手"}</span></div>
             <span className={styles.offlineTag}>{modelAvailable ? `简迹点 ${creditBalance}` : "基础模式"}</span>
@@ -834,7 +840,7 @@ export function BuilderClient({ resumeId, initialExport = false }: { resumeId: s
                 <small>仅在你点击“优化”时发送当前章节、目标，以及你已填写的岗位描述；简历联系方式、地点、项目链接不发送，岗位文本中的常见邮箱、电话和微信号会先移除。当前只发送文字，不会发送截图或本地文件。</small>
               </>
             ) : (
-              <p>当前环境尚未配置模型凭据，先使用基础分析；结果会明确标注，不冒充大模型。</p>
+              <p>当前可使用基础检查，帮助你发现资料缺漏并整理表达。</p>
             )}
           </div>
           {!advice && !adviceLoading && (

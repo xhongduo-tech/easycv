@@ -7,7 +7,7 @@ export function SiteFooter() {
       <div className="shell footer-simple">
         <div>
           <Brand />
-          <p>用 AI，把每一份简历做好。</p>
+          <p>让每一段真实经历，被好好看见。</p>
         </div>
         <nav aria-label="页脚导航">
           <Link href="/dashboard">我的简历</Link>

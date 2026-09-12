@@ -1,8 +1,6 @@
 .section {
   padding: 108px 0;
-  background:
-    radial-gradient(circle at 7% 20%, rgba(92, 62, 232, .09), transparent 26%),
-    var(--canvas);
+  background: var(--canvas);
 }
 
 .heading {
@@ -17,9 +15,10 @@
 .heading h2 {
   max-width: 760px;
   margin: 0;
-  font-size: clamp(2.35rem, 5vw, 4.45rem);
-  line-height: 1.02;
-  letter-spacing: -.065em;
+  font-size: clamp(2rem, 4vw, 3.5rem);
+  line-height: 1.25;
+  letter-spacing: -.04em;
+  text-wrap: balance;
 }
 
 .heading > p {
@@ -35,8 +34,8 @@
   align-items: center;
   gap: 20px;
   padding: 26px 28px;
-  border: 1px solid rgba(92, 62, 232, .2);
-  border-radius: 22px;
+  border: 1px solid rgba(33, 101, 83, .2);
+  border-radius: 10px;
   background: white;
   box-shadow: var(--shadow-sm);
 }
@@ -55,7 +54,7 @@
   display: block;
   margin-bottom: 5px;
   color: var(--success);
-  font-size: .73rem;
+  font-size: .75rem;
   font-weight: 800;
   letter-spacing: .08em;
 }
@@ -91,35 +90,35 @@
   flex-direction: column;
   padding: 27px;
   border: 1px solid var(--border);
-  border-radius: 21px;
+  border-radius: 10px;
   background: white;
   box-shadow: var(--shadow-sm);
 }
 
 .packGrid > .featured {
   border-color: var(--brand);
-  box-shadow: 0 20px 55px rgba(66, 38, 201, .13);
+  box-shadow: 0 0 0 1px var(--brand);
 }
 
 .packTop { display: flex; min-height: 26px; align-items: center; justify-content: space-between; gap: 12px; }
 .packTop > h3 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: .9rem; font-weight: 780; }
 .packTop svg { color: var(--brand); }
-.packTop small { padding: 5px 8px; border-radius: 99px; color: var(--ink); background: var(--lime); font-size: .65rem; font-weight: 800; }
+.packTop small { padding: 5px 8px; border-radius: 99px; color: var(--ink); background: var(--lime); font-size: .75rem; font-weight: 800; }
 
 .priceLine { display: flex; align-items: baseline; gap: 9px; margin-top: 24px; }
 .priceLine strong { font-size: 2.65rem; line-height: 1; letter-spacing: -.07em; }
-.priceLine span { color: var(--muted); font-size: .72rem; }
+.priceLine span { color: var(--muted); font-size: .75rem; }
 .creditCount { display: flex; align-items: baseline; gap: 7px; margin-top: 15px; color: var(--brand); font-size: 1.45rem; font-weight: 840; }
 .creditCount span { color: var(--ink-soft); font-size: .78rem; font-weight: 700; }
 .packGrid article > p { min-height: 45px; margin: 10px 0 0; color: var(--muted); font-size: .81rem; line-height: 1.6; }
 .unitLine { display: flex; min-height: 30px; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 0 15px; border-bottom: 1px solid var(--border); }
-.unitLine span { color: var(--ink-soft); font-size: .74rem; font-weight: 750; }
-.unitLine strong { color: var(--success); font-size: .68rem; }
+.unitLine span { color: var(--ink-soft); font-size: .75rem; font-weight: 750; }
+.unitLine strong { color: var(--success); font-size: .75rem; }
 .packGrid ul { display: grid; gap: 11px; padding: 0; margin: 19px 0 23px; list-style: none; }
 .packGrid li { display: flex; align-items: flex-start; gap: 7px; color: var(--ink-soft); font-size: .75rem; line-height: 1.45; }
 .packGrid li svg { flex: none; margin-top: 1px; padding: 2px; border-radius: 50%; color: var(--success); background: var(--lime-soft); box-sizing: content-box; }
 .packGrid :global(.button), .pending { width: 100%; min-height: 46px; margin-top: auto; }
-.pending { display: flex; align-items: center; justify-content: center; border-radius: 11px; color: var(--muted); background: var(--surface-alt); font-size: .74rem; font-weight: 720; text-align: center; }
+.pending { display: flex; align-items: center; justify-content: center; border-radius: 11px; color: var(--muted); background: var(--surface-alt); font-size: .75rem; font-weight: 720; text-align: center; }
 
 .rule {
   display: flex;

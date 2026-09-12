@@ -152,7 +152,7 @@ async function installFixture(page, state) {
 async function openBuilder(page) {
   await page.goto(new URL(`/builder/${RESUME_ID}`, baseUrl).href, { waitUntil: 'domcontentloaded' });
   await page.getByLabel('简历名称', { exact: true }).first().waitFor({ state: 'attached' });
-  if (page.viewportSize().width < 900) await page.getByRole('tab', { name: '助手', exact: true }).click();
+  await page.getByRole('tab', { name: '材料助手', exact: true }).click();
   await page.getByRole('heading', { name: '目标材料工作台', exact: true }).waitFor();
   await page.getByRole('button', { name: '刷新任务', exact: true }).waitFor();
   await page.waitForFunction(() => document.querySelector('[aria-labelledby="agent-workspace-title"]')?.getAttribute('aria-busy') === 'false');
@@ -232,8 +232,10 @@ try {
   await undo.waitFor();
   assert.equal(state.resume.revision, 2);
   assert.equal(state.resume.content.summary, DRAFT);
+  await page.getByRole('tab', { name: '编辑资料', exact: true }).click();
   await page.getByRole('navigation', { name: '简历章节' }).getByRole('button', { name: /个人简介/ }).click();
   assert.equal(await page.locator('#builder-edit textarea').inputValue(), DRAFT);
+  await page.getByRole('tab', { name: '材料助手', exact: true }).click();
   await undo.click();
   await page.waitForFunction((text) => document.querySelector('#builder-edit textarea')?.value === text, ORIGINAL);
   const savedUndo = await page.waitForResponse((response) => response.url().endsWith(`/api/resumes/${RESUME_ID}`) && response.request().method() === 'PATCH' && response.ok());
@@ -264,9 +266,11 @@ try {
       assert(recovered.state.requests.some((request) => request.method === 'GET' && request.path === `/api/agent-jobs/${JOB_ID}`), 'Double acknowledgement loss must reconcile the job');
       assert.equal(recovered.state.requests.filter((request) => request.method === 'GET' && request.path === `/api/resumes/${RESUME_ID}`).length, 2, 'Double acknowledgement loss must retrieve the authoritative resume after the initial load');
     }
+    await recovered.page.getByRole('tab', { name: '编辑资料', exact: true }).click();
     await recovered.page.getByRole('navigation', { name: '简历章节' }).getByRole('button', { name: /个人简介/ }).click();
     assert.equal(await recovered.page.locator('#builder-edit textarea').inputValue(), DRAFT);
     await screenshot(recovered.page, `desktop-apply-recovered-${lostAcks}`);
+    await recovered.page.getByRole('tab', { name: '材料助手', exact: true }).click();
     const undoSaved = recovered.page.waitForResponse((response) => response.url().endsWith(`/api/resumes/${RESUME_ID}`) && response.request().method() === 'PATCH' && response.ok());
     await recoveredUndo.click();
     assert.equal((await (await undoSaved).json()).resume.revision, 3);

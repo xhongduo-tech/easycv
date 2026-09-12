@@ -10,7 +10,8 @@ import {
   LoaderCircle,
   Search,
   ShieldCheck,
-  Sparkles,
+  ArrowRight,
+  FilePlus2,
   X,
 } from "lucide-react";
 import { ResumePreview } from "@/components/resume-preview";
@@ -203,13 +204,13 @@ export function NewResumeDialog({
     <div className={styles.dialogBackdrop} onMouseDown={(event) => { if (!creatingRef.current && event.target === event.currentTarget) onClose(); }}>
       <div ref={dialogRef} className={styles.newResumeDialog} role="dialog" aria-modal="true" aria-labelledby="new-resume-title" aria-busy={creating}>
         <div className={styles.dialogHeader}>
-          <div><span><Sparkles size={17} /></span><div><small>新建简历</small><h2 id="new-resume-title">先告诉我们你的目标</h2></div></div>
+          <div><span><FilePlus2 size={21} /></span><div><small>NEW DOCUMENT / 新建简历</small><h2 id="new-resume-title">为下一次机会，建立一个版本。</h2></div></div>
           <button ref={closeRef} type="button" disabled={creating} onClick={onClose} aria-label="关闭新建简历"><X size={20} /></button>
         </div>
 
         <div className={styles.dialogBody}>
           <section className={styles.createSection}>
-            <div className={styles.createSectionTitle}><span>1</span><div><h3>你正在准备哪一类机会？</h3><p>选择材料用途，不限制你的身份或职业阶段。</p></div></div>
+            <div className={styles.createSectionTitle}><span>01</span><div><h3>这次，用来做什么？</h3><p>从材料用途开始。无论你处在什么阶段，都可以在这里准备。</p></div></div>
             <div className={styles.purposeChoices}>
               <button type="button" disabled={creating} aria-pressed={track === "study"} className={track === "study" ? styles.purposeActive : ""} onClick={() => changeTrack("study")}>
                 <GraduationCap size={21} /><div><strong>学习与研究</strong><small>院校 · 研究项目 · 学位</small></div>{track === "study" && <Check size={17} />}
@@ -222,13 +223,14 @@ export function NewResumeDialog({
 
           {track && (
             <section className={styles.createSection}>
-              <div className={styles.createSectionTitle}><span>2</span><div><h3>目标是什么？</h3><p>选择已有目标匹配版式，也可以自定义{track === "study" ? "院校、机构或研究项目" : "企业、客户或合作项目"}。</p></div></div>
+              <div className={styles.createSectionTitle}><span>02</span><div><h3>准备交给谁？</h3><p>选择目标，或直接填写你的{track === "study" ? "院校、机构或研究项目" : "企业、客户或合作项目"}。</p></div></div>
               <div className={styles.groupChips} role="group" aria-label={track === "study" ? "院校地区" : "企业类型"}>
                 {groups.map((group) => <button type="button" disabled={creating} key={group.key} aria-pressed={!query && selectedGroup === group.key} className={!query && selectedGroup === group.key ? styles.groupActive : ""} onClick={() => { setSelectedGroup(group.key); setQuery(""); setSelectedTarget(""); setCustomTarget(""); }}>{group.label}<small>{group.count}</small></button>)}
               </div>
               <label className={styles.targetSearch}><Search size={17} /><span className="sr-only">搜索目标</span><input disabled={creating} value={query} onChange={(event) => { setQuery(event.target.value); setSelectedTarget(""); }} placeholder={`搜索${track === "study" ? "院校或地区" : "企业或行业"}`} /></label>
               {loading ? <div className={styles.targetLoading}><LoaderCircle size={19} /> 正在加载目标…</div> : (
                 <div className={styles.targetOptions}>
+                  {visibleTargets.length === 0 && <p className={styles.noTargets}>没有找到匹配目标。可以在下方直接填写。</p>}
                   {visibleTargets.map((item) => <button type="button" disabled={creating} key={item.id} aria-pressed={selectedTarget === item.id} className={selectedTarget === item.id ? styles.targetActive : ""} onClick={() => {
                     setSelectedTarget(item.id);
                     setCustomTarget("");
@@ -242,7 +244,7 @@ export function NewResumeDialog({
               {track === "career" && (
                 <p className={styles.brandNotice}>
                   <ShieldCheck size={15} />
-                  <span>企业名称及经权利审查后展示的标识仅用于目标识别，不表示合作或背书；未获明确许可时使用中性字标。</span>
+                  <span>企业名称及标识仅用于目标识别，不表示合作或背书。</span>
                 </p>
               )}
               <label className={styles.customTarget}><span>没有找到？</span><input disabled={creating} value={customTarget} onChange={(event) => {
@@ -260,7 +262,7 @@ export function NewResumeDialog({
 
           {track === "career" && (target || customTarget.trim()) && (
             <section className={styles.createSection}>
-              <div className={styles.createSectionTitle}><span>3</span><div><h3>目标岗位或合作方向是什么？</h3><p>帮助我们推荐版式并确定表达重点；具体要求可进入编辑器后补充。</p></div></div>
+              <div className={styles.createSectionTitle}><span>03</span><div><h3>你的目标方向</h3><p>让表达有重点。具体要求可以进入编辑器后再补充。</p></div></div>
               <label className={styles.focusField}>
                 <span>岗位或方向</span>
                 <input
@@ -276,7 +278,7 @@ export function NewResumeDialog({
 
           {track && (target || customTarget.trim()) && (
             <section className={styles.createSection}>
-              <div className={styles.createSectionTitle}><span>{track === "career" ? "4" : "3"}</span><div><h3>选择专业版式</h3><p>这是基于阅读场景和岗位的推荐，不是目标单位官方模板。</p></div></div>
+              <div className={styles.createSectionTitle}><span>{track === "career" ? "04" : "03"}</span><div><h3>选择一张好纸</h3><p>按阅读场景推荐的专业版式，之后仍可更换。非目标单位官方模板。</p></div></div>
               <div className={styles.templateRecommendations}>
                 {recommendedTemplates.map((item, index) => (
                   <article
@@ -312,7 +314,7 @@ export function NewResumeDialog({
         <div className={styles.dialogFooter}>
           <div>{error ? <p role="alert">{error}</p> : <span>创建空白草稿；示例内容不会写入你的简历。</span>}</div>
           <button className="button button-primary" type="button" disabled={creating || loading || !track || (!target && !customTarget.trim()) || (track === "career" && !focusName.trim())} onClick={() => void createResume()}>
-            {creating ? <><LoaderCircle size={17} /> 正在创建…</> : <>创建并开始填写 <Sparkles size={17} /></>}
+            {creating ? <><LoaderCircle className={styles.spin} size={17} /> 正在创建…</> : <>创建并开始填写 <ArrowRight size={17} /></>}
           </button>
         </div>
       </div>

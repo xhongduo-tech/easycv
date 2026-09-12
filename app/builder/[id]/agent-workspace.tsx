@@ -279,10 +279,16 @@ export function AgentWorkspace({ resume, saveStatus, onApplied, onApplying }: {
       </header>
 
       <p className={styles.intro}>整理证据，补齐关键问题，一起完成目标简历和面试提纲。</p>
-      <div className={styles.meta}><span>Codex 执行</span><span>试点期间不扣简迹点</span></div>
+      <div className={styles.meta}><span>Codex 协助准备</span><span>试点期间不扣简迹点</span></div>
+
+      {!job && !loading && <ol className={styles.preparationSteps} aria-label="材料准备流程">
+        <li><span>01</span><strong>整理经历</strong><p>从你已保存的资料中找到相关内容。</p></li>
+        <li><span>02</span><strong>补齐细节</strong><p>通过少量追问，让你的贡献更具体。</p></li>
+        <li><span>03</span><strong>审阅材料</strong><p>核对修改与来源，带走简历和面试提纲。</p></li>
+      </ol>}
 
       {loading ? <p className={styles.note} role="status"><LoaderCircle size={15} className={styles.spin} /> 正在恢复你的任务…</p>
-        : runtime && !runtime.enabled ? <div className={styles.unavailable}><span><Clock3 size={15} /> {loginRequired ? "登录后准备目标材料" : runtime.reason?.includes("待配置") ? "执行服务待配置" : "执行服务暂不可用"}</span><p>{runtime.reason || "Codex 执行服务尚未启用。配置完成后，可在这里启动材料任务。"}</p>{loginRequired && <Link className={styles.loginLink} href={`/auth/login?returnTo=${encodeURIComponent(`/builder/${resume.id}`)}`}>登录并保留这份简历 <ArrowRight size={13} /></Link>}<small>你可以继续编辑、导入和导出简历。</small></div> : null}
+        : runtime && !runtime.enabled ? <div className={styles.unavailable}><span><Clock3 size={15} /> {loginRequired ? "登录后准备目标材料" : "材料助手暂不可用"}</span><p>{runtime.reason || "材料准备暂未开放，请稍后再试。"}</p>{loginRequired && <Link className={styles.loginLink} href={`/auth/login?returnTo=${encodeURIComponent(`/builder/${resume.id}`)}`}>登录并保留这份简历 <ArrowRight size={13} /></Link>}<small>你可以继续编辑、导入和导出简历。</small></div> : null}
 
       {!loading && runtime?.enabled && !activeJob && (
         <div className={styles.launch}>
@@ -327,8 +333,10 @@ export function AgentWorkspace({ resume, saveStatus, onApplied, onApplying }: {
           {!result.proposals.length && <p className={styles.summary}>本次没有可应用的文字修改。可参考任务说明与面试提纲完善材料。</p>}
           <div className={styles.proposals}>{result.proposals.map((proposal, index) => <article key={proposal.id} className={styles.proposal} data-selected={selectedProposalIds.includes(proposal.id)}>
             <label className={styles.proposalSelect}>{job.status === "ready" && <input type="checkbox" disabled={Boolean(busy) || stale || !saved} checked={selectedProposalIds.includes(proposal.id)} onChange={() => toggleProposal(proposal.id)} />}<strong>{index + 1}. {job.input.sources.find((source) => source.id === proposal.sourceId)?.label ?? "经历表达"}</strong></label>
-            <div className={styles.original}><span>原文</span><p>{proposal.originalText}</p></div>
-            <div className={styles.draft}><span>候选表达</span><p>{proposal.draftText}</p></div>
+            <div className={styles.comparison}>
+              <div className={styles.original}><span>原文</span><p>{proposal.originalText}</p></div>
+              <div className={styles.draft}><span>候选表达</span><p>{proposal.draftText}</p></div>
+            </div>
             <p className={styles.rationale}>{proposal.rationale}</p>
             {proposal.warnings.length > 0 && <ul className={styles.warnings}>{proposal.warnings.map((warning) => <li key={warning}><AlertCircle size={13} />{warning}</li>)}</ul>}
             <Evidence job={job} ids={proposal.evidenceIds} />
